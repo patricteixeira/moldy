@@ -1,7 +1,8 @@
 # brand-runtime — documento fundador
 
 **Nome de trabalho:** brand-runtime (batismo pendente — §10)
-**Status:** spec fundadora v1 — decisões aprovadas em conversa em 11/07/2026
+**Status:** spec fundadora v1 — aprovada em 11/07/2026 e reconciliada em
+12/07/2026 com as ADRs 0001–0007 e o motor concluído do Plano 1
 **Substitui como referência de produto:** `brand-compiler-projeto (1).md`, `brand-compiler-system-design.md`, `brand-compiler-roadmap.md` e a pesquisa de mercado. O destino de cada documento anterior está no §11 — nada foi descartado sem endereço.
 
 ---
@@ -118,7 +119,10 @@ pacote informal da marca                 entrada estruturada (atalho)
 
 Herança direta do system design anterior (que separava Brand IR / Deck Spec / Document Graph), generalizada para além de apresentações:
 
-- **Brand IR** — a marca executável. Tokens, papéis semânticos (`heading`, `body`, `caption`, `quote`), assets com hash, perfis de formato, regras, proveniência, diagnostics. Independente de qualquer formato de saída. Revisões imutáveis; documentos gerados registram o `brandRevisionId` de origem.
+- **Brand IR** — a marca executável. Tokens, papéis semânticos (`heading`,
+  `body`, `caption`), assets com hash, perfis de formato, regras, proveniência e
+  diagnostics. Independente de qualquer formato de saída. Revisões imutáveis;
+  documentos gerados registram o `brandRevisionId` de origem.
 - **Layout Spec** — um layout como dados: slots tipados, composição, constraints, política de fitting. Produzido pelo Kit Generator, validável por schema, renderizável em qualquer formato de saída compatível com seu perfil.
 - **Content Spec** — o que o usuário preencheu: valores por slot. Equivalente generalizado do "Deck Spec" anterior (posts e documentos, não só decks).
 
@@ -133,7 +137,12 @@ PPTX editado fora ──Parser──► Document Graph ──Linter/Fixer──�
 
 ### 5.3 Brand Intake
 
-**Entradas do M1:** PDF de manual de marca; logos (SVG/PNG); fontes (arquivos ou apenas nomes); cores anotadas; exemplos de materiais aprovados. Atalho para instaladores técnicos: tokens DTCG/Tokens Studio (parse direto para o IR, custo marginal).
+**Entradas interpretadas pelo motor do M1:** PDF de manual de marca; logos
+(SVG/PNG); fontes (arquivos ou apenas nomes); cores extraídas e tokens
+DTCG/Tokens Studio. DTCG é a camada de maior autoridade no ranking, mas não
+fura o princípio de confirmação: seus valores também passam pelo wizard antes
+de entrar no IR. Exemplos de materiais aprovados podem viajar no pacote, mas
+sua interpretação visual permanece fora do motor do Plano 1.
 
 **Extração com evidência.** Cada valor candidato carrega origem (arquivo, página, região), confiança e autoridade — modelo herdado do system design anterior, com sua regra central mantida: **inferência nunca vence fonte autoritativa, e conflito material nunca é resolvido silenciosamente.** No mundo leigo-first, "resolver conflito" vira pergunta de confirmação em linguagem natural.
 
@@ -149,27 +158,81 @@ PPTX editado fora ──Parser──► Document Graph ──Linter/Fixer──�
 {
   "schemaVersion": "0.1.0",
   "brand": { "name": "Empresa X" },
-  "revision": { "id": "brandrev_0003", "createdAt": "2026-07-11" },
-  "tokens": {
+  "revision": {
+    "id": "brandrev_a1b2c3d4e5f6",
+    "createdAt": "2026-07-11T12:00:00Z"
+  },
+  "colors": {
     "color.primary": {
       "value": "#1A4D8F",
       "evidence": [
         { "sourceType": "pdf-guideline", "path": "manual.pdf", "page": 12, "confidence": 0.92 },
-        { "sourceType": "wizard-confirmation", "confirmedAt": "2026-07-11", "authoritative": true }
+        { "sourceType": "wizard-confirmation", "confidence": 1.0, "authoritative": true, "confirmedAt": "2026-07-11T12:00:00Z" }
       ]
     },
-    "font.heading": { "value": { "family": "Archivo", "weight": 700 }, "evidence": ["..."] }
+    "color.background": {
+      "value": "#FFFFFF",
+      "evidence": [
+        { "sourceType": "wizard-confirmation", "confidence": 1.0, "authoritative": true, "confirmedAt": "2026-07-11T12:00:00Z" }
+      ]
+    },
+    "color.text": {
+      "value": "#1A1A1A",
+      "evidence": [
+        { "sourceType": "wizard-confirmation", "confidence": 1.0, "authoritative": true, "confirmedAt": "2026-07-11T12:00:00Z" }
+      ]
+    }
   },
-  "semanticRoles": {
-    "heading": { "font": "font.heading", "color": "color.primary" },
-    "body": { "font": "font.body", "color": "color.text" }
+  "fonts": {
+    "font.heading": {
+      "family": "Archivo",
+      "weight": 700,
+      "style": "normal",
+      "source": "file",
+      "fileSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidence": [
+        { "sourceType": "font-file", "path": "fonts/archivo-bold.ttf", "confidence": 1.0 },
+        { "sourceType": "wizard-confirmation", "confidence": 1.0, "authoritative": true, "confirmedAt": "2026-07-11T12:00:00Z" }
+      ]
+    },
+    "font.body": {
+      "family": "Inter",
+      "weight": 400,
+      "style": "normal",
+      "source": "referenced-only",
+      "fileSha256": null,
+      "evidence": [
+        { "sourceType": "wizard-confirmation", "confidence": 1.0, "authoritative": true, "confirmedAt": "2026-07-11T12:00:00Z" }
+      ]
+    }
+  },
+  "roles": {
+    "heading": { "font": "font.heading", "color": "color.primary", "minSizePx": 40, "maxSizePx": 96, "lineHeight": 1.1 },
+    "body": { "font": "font.body", "color": "color.text", "minSizePx": 16, "maxSizePx": 24, "lineHeight": 1.5 },
+    "caption": { "font": "font.body", "color": "color.text", "minSizePx": 12, "maxSizePx": 16, "lineHeight": 1.4 }
   },
   "assets": {
-    "logo.primary": { "path": "assets/logos/primary.svg", "sha256": "…", "minWidthPx": 96, "clearSpaceRatio": 0.25, "variants": ["light", "dark"] }
+    "logo.primary": {
+      "path": "assets/logos/primary.svg",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "format": "svg",
+      "evidence": [
+        { "sourceType": "svg-asset", "path": "assets/logos/primary.svg", "confidence": 0.95 },
+        { "sourceType": "wizard-confirmation", "confidence": 1.0, "authoritative": true, "confirmedAt": "2026-07-11T12:00:00Z" }
+      ],
+      "minWidthPx": 96,
+      "clearSpaceRatio": 0.25
+    }
   },
   "formatProfiles": ["post-1x1", "post-4x5", "story-9x16", "doc-a4"],
-  "fontLicensing": { "font.heading": "hosted-google-fonts", "font.body": "file-provided-unverified" },
-  "diagnostics": [ { "code": "FONT_FILE_MISSING", "target": "font.body", "resolution": "fallback-confirmed" } ]
+  "diagnostics": [
+    {
+      "code": "FONT_FILE_MISSING",
+      "target": "font.body",
+      "message": "A fonte «Inter» foi confirmada, mas o arquivo dela não veio no pacote.",
+      "resolution": "render-fallback"
+    }
+  ]
 }
 ```
 
@@ -213,19 +276,41 @@ No mundo de slots, a maior parte das violações do linter anterior é **estrutu
 - **Resolução mínima de imagem** — bloquear abaixo do limiar do perfil.
 - **Área segura** — garantida por construção nos layouts; checada no conteúdo que pode vazar.
 
-Tudo determinístico e auditável, com mensagens em linguagem de gente e correção de um clique. Severidades formais (info/warning/error/locked) só entram no M3, onde há edição livre para justificá-las.
+Tudo determinístico e auditável, com mensagens em linguagem de gente e ação de
+correção clara. No motor concluído do Plano 1, o Guard estático emite `pass` ou
+`blocked`; `fixed` permanece no contrato compartilhado, mas nenhuma correção é
+aplicada silenciosamente. Overflow medido, fallback de fonte e contraste sobre
+imagem precisam ser integrados ao verdict nos Planos 2 e 3. Severidades formais
+(`info`/`warning`/`error`/`locked`) só entram no M3, onde há edição livre para
+justificá-las.
 
 ### 5.9 Plataforma
 
-Modular monolith + worker (decisão herdada — microserviços continuam explicitamente adiados). API FastAPI; jobs assíncronos (import, geração de kit, export) em fila persistida; PostgreSQL para metadados e JSONB de IR/specs; assets em storage endereçado por conteúdo (SHA-256, deduplicado — herdado); revisões imutáveis em tudo (marca, kit, documento); logs estruturados com correlation ID.
+Modular monolith + worker (decisão herdada — microserviços continuam
+explicitamente adiados). API FastAPI; jobs de export em tabela persistida no
+PostgreSQL; JSONB para IR/specs; assets em filesystem endereçado por conteúdo
+no M1 (SHA-256, deduplicado), com adapter S3-compatible reservado para evolução;
+revisões imutáveis em tudo (marca, kit, documento). Logs estruturados com
+correlation ID continuam pendentes da camada de plataforma.
 
-Auth do M1: simples, por convite. Single-tenant por instância, N marcas por instância. O modelo de dados mantém o conceito de workspace (herdado) para não fechar a porta ao multi-tenant do M4.
+Auth do M1: token de convite, single-tenant por instância e N marcas por
+instância. O M1 não materializa workspaces nem multi-tenant; essa fronteira fica
+reservada para o M4. A UI não expõe uma tela de login: fala apenas por paths
+same-origin, e o proxy controlado da instância injeta o header
+`Authorization: Bearer <token>`. Tokens em query string são recusados para não
+vazar em histórico ou logs. A porta web é, conscientemente, a superfície
+confiável da instância no M1.
 
 ---
 
 ## 6. Marcos
 
 ### M1 — "A marca instalada"
+
+**Estado em 12/07/2026:** o motor arquivo→arquivo do Plano 1 está concluído
+(intake, confirmação, Brand IR, kit, Guard, CLI e schemas). Render/export, API,
+app web, Docker Compose e E2E permanecem pendentes nos Planos 2–4; portanto o
+M1 ainda não está concluído.
 
 **Walking skeleton** (disciplina herdada do roadmap anterior — nada de expansão antes deste roteiro funcionar de ponta a ponta):
 
@@ -269,12 +354,12 @@ Importador Figma (quando o acesso à API for viável), adapters comunitários de
 | Camada | Escolha | Justificativa |
 |---|---|---|
 | Núcleo / API | Python 3.12+, FastAPI, Pydantic v2 | intake e regras são extração + orquestração — campo forte do Python; Pydantic exporta o JSON Schema do IR de graça |
-| Extração | PyMuPDF + pdfplumber, Pillow, fonttools | melhor ecossistema de PDF/imagem/fonte disponível; PyMuPDF (AGPL) compatível com a licença escolhida |
-| Frontend | TypeScript, React, Vite | wizard + slot editor + biblioteca de render; React trocável por Svelte até a primeira linha (§10) |
+| Extração | PyMuPDF, Pillow, fontTools, defusedxml | PDF, imagem, fonte e SVG seguro no motor do M1; PyMuPDF (AGPL) é compatível com a licença escolhida |
+| Frontend | TypeScript, React, Vite | React foi fixado para o wizard, slot editor e integração com a biblioteca de render |
 | Render/export | biblioteca TS única + Playwright/Chromium headless | preview e export do mesmo código — WYSIWYG por construção |
 | OOXML (M2) | python-pptx, python-docx, lxml; LibreOffice headless em sandbox | template-fill + cirurgia XML; conversões e previews isolados |
-| Dados | PostgreSQL (JSONB), storage S3-compatible ou filesystem | herdado do design anterior; content-addressed por SHA-256 |
-| Fila | a decidir na implementação (arq / RQ / jobs em Postgres) | começar pelo mais simples que dê retry, timeout e status |
+| Dados | PostgreSQL (JSONB), filesystem content-addressed no M1 | storage por SHA-256; adapter S3-compatible pode entrar sem alterar os contratos |
+| Fila | tabela de jobs no PostgreSQL | escolha mínima do M1, com status `queued|running|succeeded|failed` e worker por polling |
 | LLM | abstração própria, provedores plugáveis (Anthropic/OpenAI/Ollama) | sempre opcional; nunca no caminho crítico nem na decisão de conformidade |
 | Observabilidade | logs estruturados com correlationId | OpenTelemetry quando a plataforma justificar |
 
@@ -285,7 +370,10 @@ Importador Figma (quando o acesso à API for viável), adapters comunitários de
 ## 8. Licenciamento e distribuição
 
 - **Aplicação e motor: AGPL-3.0.** Quem oferecer o sistema como serviço é obrigado a publicar modificações — proteção contra fork SaaS fechado.
-- **Schema do Brand IR, exemplos e SDKs: MIT.** O formato deve poder ser adotado por qualquer ferramenta, inclusive fechada — o ecossistema de adapters depende disso. (Apache-2.0 é alternativa com patent grant; decidir com revisão jurídica antes da publicação — ressalva herdada do design anterior.)
+- **Schemas públicos do motor, exemplos e SDKs: MIT.** Os formatos devem poder
+  ser adotados por qualquer ferramenta, inclusive fechada — o ecossistema de
+  adapters depende disso. Apache-2.0 permanece como alternativa com patent
+  grant; a decisão final depende de revisão jurídica antes da publicação.
 - **Documentação e spec: CC BY 4.0.**
 - **Fontes:** nunca redistribuídas pelo repositório nem pela instância sem licença registrada. O intake classifica cada fonte (instalada / hospedada / embutível / apenas referenciada / fallback) e toda substituição é sinalizada — nunca silenciosa.
 - **Distribuição M1:** `docker compose up`, single-tenant por instância, auth por convite. Instância pública multi-tenant só no M4.
@@ -309,12 +397,11 @@ Importador Figma (quando o acesso à API for viável), adapters comunitários de
 
 ## 10. Decisões abertas
 
-- **Nome do projeto** — dono: Patrick. Até lá, `brand-runtime`.
-- **React vs Svelte** — decidir na primeira linha do frontend; nada nesta spec depende da escolha.
-- **Fila de jobs** — arq, RQ ou tabela de jobs em Postgres; decidir na implementação pelo mais simples suficiente.
+- **Nome do projeto** — dono: Patric. Até lá, `brand-runtime`.
 - **PDF paginado** — começar com Chromium print; revisitar WeasyPrint quando documentos exigirem cabeçalho corrido/numeração séria.
 - **MIT vs Apache-2.0 para o schema** — revisão antes da publicação do repo.
-- **Idioma da UI do M1** (provável PT-BR) e momento do README EN.
+- **README em inglês** — decidir o momento da tradução; UI e documentação de
+  trabalho do M1 já estão fixadas em PT-BR pela ADR 0007.
 
 ---
 

@@ -9,7 +9,8 @@ PDF, logos, fontes, cores anotadas), transforma tudo num **Brand IR**
 versionado e gera trilhos (kits de layout com slots) dentro dos quais qualquer
 pessoa produz posts, documentos e materiais corretos em relação à marca.
 
-**Status: em construção** — Marco 1 (walking skeleton) em implementação.
+**Status: em construção** — o motor Python e sua CLI (Plano 1) estão
+concluídos; render, API, app web e o E2E do Marco 1 continuam pendentes.
 A spec fundadora está em
 [`docs/superpowers/specs/2026-07-11-brand-runtime-design.md`](docs/superpowers/specs/2026-07-11-brand-runtime-design.md).
 
@@ -18,7 +19,7 @@ A spec fundadora está em
 ```
 packages/engine/   Motor Python: intake (extração + confirmação), Brand IR,
                    gerador de kit, guard estático, CLI `brandrt`
-schemas/           JSON Schemas publicados do Brand IR e specs (licença MIT)
+schemas/           JSON Schemas públicos do motor (licença MIT)
 docs/              Spec fundadora, planos de implementação e ADRs
 ENGINEERING.md     Padrões de engenharia e segurança do projeto
 ```
@@ -36,8 +37,11 @@ cd packages/engine
 python -m venv .venv
 .venv/Scripts/pip install -e ".[dev]"      # Windows (em POSIX: .venv/bin/pip)
 .venv/Scripts/python -m pytest -q          # suíte de testes
-.venv/Scripts/brandrt --help               # CLI (disponível ao fim do Plano 1)
+.venv/Scripts/brandrt --help               # comandos do motor
 ```
+
+O fluxo arquivo→arquivo completo e os códigos de saída da CLI estão documentados
+em [`packages/engine/README.md`](packages/engine/README.md).
 
 ## Documentação
 
@@ -50,5 +54,8 @@ python -m venv .venv
 
 - Aplicação e motor: **AGPL-3.0** ([`LICENSE`](LICENSE)) — quem oferece o
   sistema como serviço deve publicar suas modificações.
-- Schemas do Brand IR (`schemas/`): **MIT** ([`schemas/LICENSE`](schemas/LICENSE)) —
-  o formato pode ser adotado por qualquer ferramenta, inclusive fechada.
+- Schemas públicos do motor (`schemas/`): **MIT**
+  ([`schemas/LICENSE`](schemas/LICENSE)) — Brand IR, Layout Spec, Content Spec e
+  Guard Verdict podem ser adotados por qualquer ferramenta, inclusive fechada.
+  A escolha ainda passa por revisão jurídica antes da publicação pública
+  (ADR 0003).

@@ -7,8 +7,8 @@
 O §4 do `ENGINEERING.md` exige consistência de vocabulário, e o projeto vinha
 com um misto de facto: identificadores em inglês, docstrings e mensagens em
 PT-BR, documentação de produto em PT-BR. O requisito de código comentado e
-documentado (ver ADR no memory do projeto e `ENGINEERING.md` §5/§7) tornou a
-escolha urgente: um passe de documentação cobrirá todo o motor.
+documentado (`ENGINEERING.md` §5/§7) tornou a escolha urgente: o motor deve
+permanecer legível e revisável no idioma de trabalho do projeto.
 
 ## Decisão
 
@@ -17,8 +17,9 @@ escolha urgente: um passe de documentação cobrirá todo o motor.
 - **Identificadores de código (funções, classes, variáveis): inglês**, por ser
   a convenção idiomática dos ecossistemas Python/TypeScript e das bibliotecas
   usadas — nomes como `build_draft` convivem com docstring em PT-BR.
-- Presença de docstring é verificada por máquina (regras `D` do ruff no CI);
-  o idioma é convenção revisada em code review.
+- Presença e formato de docstrings são verificados por máquina pelas regras `D`
+  do Ruff no CI; `ruff format --check` também faz parte do gate. O idioma
+  permanece uma convenção verificada em code review.
 
 ## Alternativas consideradas
 

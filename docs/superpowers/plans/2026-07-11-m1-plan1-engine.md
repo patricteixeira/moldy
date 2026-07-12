@@ -1,6 +1,12 @@
 # Plano 1 — Motor da marca (Python) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** concluído em 12/07/2026. As 15 tarefas foram implementadas e
+integradas na branch `m1-walking-skeleton`; render, API e web pertencem aos
+Planos 2–4.
+
+> **Registro histórico:** os checkboxes abaixo preservam o roteiro normativo
+> original e não representam o progresso atual. O status acima e o histórico
+> de commits são a fonte de verdade da execução.
 >
 > **Formato deste plano:** os testes de cada tarefa são o contrato completo e obrigatório — implemente por TDD até que passem sem alterá-los (mudança em teste = desvio a reportar). Assinaturas, regras e tabelas dadas aqui são normativas. Onde o corpo da implementação não está escrito, ele é livre desde que os testes e as regras sejam satisfeitos.
 
@@ -19,7 +25,7 @@
 - Determinismo: `compile_ir` recebe `created_at` injetável; id de revisão derivado de hash do conteúdo (nunca de relógio/aleatório).
 - Uploads são hostis: SVG passa por sanitização antes de qualquer parse de cor (spec §5.3).
 - Antes de cada commit: `.venv/Scripts/python -m pytest packages/engine -q` verde e `.venv/Scripts/python -m ruff check packages/engine` limpo (comandos a partir de `packages/engine`, ver Task 1).
-- Commits na branch `m1-walking-skeleton`, mensagem `feat(engine): <resumo>` + trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+- Commits na branch `m1-walking-skeleton`, mensagem `feat(engine): <resumo>`.
 - Nunca editar este arquivo de plano nem os documentos em `docs/` (o orquestrador rastreia progresso fora do arquivo).
 
 ---
