@@ -1019,6 +1019,7 @@ def test_logo_slot_everywhere_locked(brand_package):
 **Files:**
 - Create: `packages/engine/src/brand_runtime/guard/__init__.py`
 - Create: `packages/engine/src/brand_runtime/guard/static_checks.py`
+- Modify: `packages/engine/src/brand_runtime/ir/schema.py` (registrar verdict compartilhado)
 - Test: `packages/engine/tests/test_guard.py`
 
 **Interfaces:**
@@ -1032,15 +1033,20 @@ class GuardCheck(CamelModel):
     message_pt: str
     detail: dict = Field(default_factory=dict)
 
+class GuardVerdict(CamelModel):
+    checks: list[GuardCheck]           # artefato mestre {"checks": [...]}
+
 def run_static_checks(ir: BrandIR, layout: LayoutSpec, content: ContentSpec,
                       assets_dir: Path) -> list[GuardCheck]
 ```
+
+`export_schemas` passa a emitir também `guard-verdict.schema.json`.
 
 - Regras normativas (ordem determinística: bindings/ids desconhecidos, required/tipo, comprimento, resolução, contraste; mensagens exatas onde fixadas):
   0. contrato: `content.layout_id != layout.id` ou `content.brand_revision_id != ir.revision.id` → `document-contract` blocked; chave de `content.values` sem slot correspondente → `unknown-slot` blocked; valor cujo kind não casa com o slot (`TextValue` para text, `ImageValue` para image) → `content-type` blocked. Esses checks impedem falso pass e nunca lançam `KeyError`/`AttributeError` para input de usuário;
   1. `required-slot`: slot `required=True` (exceto kind `logo`) sem valor em `content.values` — ou texto vazio/apenas whitespace — → blocked, `"Preencha o campo obrigatório «{slot.id}»."`;
   2. `text-length`: `len(text) > max_chars` → blocked, `"O texto de «{slot.id}» tem {n} caracteres; o máximo deste layout é {max}."`, detail `{"chars": n, "maxChars": max}`; dentro do limite → pass;
-  3. `image-resolution`: conteúdo de imagem do M1 aceita somente PNG/JPEG. Antes de abrir, resolver o path estritamente sob `assets_dir` e bloquear path absoluto, traversal, symlink externo, diretório, ausência, arquivo inválido/truncado e erro/decompression bomb do Pillow — nenhuma exceção crua escapa. Se `width < minResolution[0]` ou `height < minResolution[1]` → blocked, `"A imagem de «{slot.id}» tem {w}×{h}px; o mínimo para este formato é {mw}×{mh}px."`; arquivo ausente → blocked `"A imagem de «{slot.id}» não foi encontrada."`;
+  3. `image-resolution`: todo `ImageValue` é validado, mesmo quando o slot não declara `minResolution`; conteúdo de imagem do M1 aceita somente PNG/JPEG. Antes de abrir, resolver o path estritamente sob `assets_dir` e bloquear path absoluto, traversal, symlink externo, diretório, ausência, arquivo inválido/truncado e erro/decompression bomb do Pillow — nenhuma exceção crua escapa. Se `sha256` foi informado, emitir `asset-integrity` e comparar com o hash real em streaming. Quando há mínimo e `width < minResolution[0]` ou `height < minResolution[1]` → blocked, `"A imagem de «{slot.id}» tem {w}×{h}px; o mínimo para este formato é {mw}×{mh}px."`; arquivo ausente → blocked `"A imagem de «{slot.id}» não foi encontrada."`;
   4. `contrast`: para cada slot de texto sobre fundo `kind="color"`: `wcag_contrast(ir.colors[role.color].value, ir.colors[background.color_token].value) < 4.5` → blocked, `"O contraste entre o texto de «{slot.id}» e o fundo é insuficiente para leitura."`, detail `{"ratio": <2 casas>}`; senão pass. Fundo `image-slot`: não avaliar aqui (medição é do render, Plano 2);
   5. nunca alterar conteúdo — `fixed` pertence ao contrato compartilhado, mas não é emitido pelo guard estático no M1; qualquer correção futura precisa ser explícita e medida;
 
@@ -1213,6 +1219,6 @@ def test_missing_required_exits_2(brand_package, tmp_path):
 
 ## Self-Review (do autor do plano)
 
-- **Cobertura da spec (escopo motor):** intake informal §5.3 → T4–T9; atalho DTCG → T10; autoridade/evidência → T3/T9/T11; IR §5.4 → T3/T11; kit §5.5 (adaptação, não resize) → T12/T13; guard §5.8 (nunca truncar; mensagens de gente) → T14; determinismo §5.7/NFR → T11; segurança SVG §5.3 → T6; schemas publicados → T3/T12. Medição de overflow real e contraste sobre foto ficam para o Plano 2 (render) — registrado no guard como fora de escopo.
+- **Cobertura da spec (escopo motor):** intake informal §5.3 → T4–T9; atalho DTCG → T10; autoridade/evidência → T3/T9/T11; IR §5.4 → T3/T11; kit §5.5 (adaptação, não resize) → T12/T13; guard §5.8 (nunca truncar; mensagens de gente) → T14; determinismo §5.7/NFR → T11; segurança SVG §5.3 → T6; schemas publicados → T3/T12/T14. Medição de overflow real e contraste sobre foto ficam para o Plano 2 (render) — precisam ser adaptados ao `GuardVerdict` antes do fechamento do export.
 - **Type-consistency:** `Candidate`/`Evidence` definidos em T3/T4 e usados idênticos em T5–T11; `FontInfo` definido em T5, reusado em T8; `PROFILES` de T12 casa com o plano-mestre; `_ir`/`_answers`/`FIXED` reexportados entre módulos de teste com `tests/__init__.py` (T13).
 - **Placeholders:** nenhum; corpos de implementação não-mostrados estão integralmente especificados por testes + regras normativas numeradas.
