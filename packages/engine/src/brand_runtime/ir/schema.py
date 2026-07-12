@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from brand_runtime.guard.static_checks import GuardVerdict
 from brand_runtime.ir.models import BrandIR
 from brand_runtime.kit.models import ContentSpec, LayoutSpec
 
@@ -17,6 +18,7 @@ _SCHEMAS: list[tuple[str, type[BaseModel]]] = [
     ("brand-ir.schema.json", BrandIR),
     ("layout-spec.schema.json", LayoutSpec),
     ("content-spec.schema.json", ContentSpec),
+    ("guard-verdict.schema.json", GuardVerdict),
 ]
 
 
