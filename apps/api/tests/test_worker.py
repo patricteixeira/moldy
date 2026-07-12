@@ -1,4 +1,6 @@
 import threading
+import time
+from datetime import UTC, datetime, timedelta
 
 from brand_api.db import new_id
 from brand_api.exporters import ExportOutcome
@@ -164,6 +166,149 @@ def test_worker_commita_claim_e_concorrencia_nao_duplica(client, compiled):
     assert result == [True]
     assert calls == [job_id]
     assert _job(client, job_id)["status"] == "succeeded"
+
+
+def test_worker_heartbeat_impede_reclaim_de_job_ativo(client, compiled):
+    state = client.app.state
+    job_id = _queue_job(client, compiled)
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingExporter:
+        def export(self, *, ir, layout, content, assets_dir, out_path, **kwargs):
+            entered.set()
+            assert release.wait(timeout=10)
+            out_path.write_bytes(b"resultado-ativo")
+            return ExportOutcome(
+                out_path,
+                run_static_checks(ir, layout, content, assets_dir),
+            )
+
+    result = []
+    thread = threading.Thread(
+        target=lambda: result.append(
+            run_next_job(
+                state.session_factory,
+                storage=state.storage,
+                exporter=BlockingExporter(),
+                settings=state.settings,
+                lease_timeout=timedelta(milliseconds=150),
+                heartbeat_seconds=0.03,
+            )
+        )
+    )
+    thread.start()
+    assert entered.wait(timeout=10)
+    time.sleep(0.35)
+
+    class ShouldNotRun:
+        def export(self, **kwargs):
+            raise AssertionError("Um job com heartbeat recente não pode ser recuperado.")
+
+    assert (
+        run_next_job(
+            state.session_factory,
+            storage=state.storage,
+            exporter=ShouldNotRun(),
+            settings=state.settings,
+            lease_timeout=timedelta(milliseconds=150),
+            heartbeat_seconds=0.03,
+        )
+        is False
+    )
+    release.set()
+    thread.join(timeout=10)
+
+    assert result == [True]
+    assert _job(client, job_id)["status"] == "succeeded"
+
+
+def test_worker_recupera_running_expirado(client, compiled):
+    state = client.app.state
+    job_id = _queue_job(client, compiled)
+    with state.session_factory() as session:
+        job = session.get(Job, job_id)
+        assert job is not None
+        job.status = "running"
+        job.started_at = datetime.now(UTC) - timedelta(minutes=10)
+        session.commit()
+
+    class RecoveredExporter:
+        def export(self, *, ir, layout, content, assets_dir, out_path, **kwargs):
+            out_path.write_bytes(b"resultado-recuperado")
+            return ExportOutcome(
+                out_path,
+                run_static_checks(ir, layout, content, assets_dir),
+            )
+
+    assert run_next_job(
+        state.session_factory,
+        storage=state.storage,
+        exporter=RecoveredExporter(),
+        settings=state.settings,
+        lease_timeout=timedelta(minutes=5),
+        heartbeat_seconds=0.03,
+    )
+    job = _job(client, job_id)
+    assert job["status"] == "succeeded"
+    assert state.storage.get(job["result"]["sha256"]) == b"resultado-recuperado"
+
+
+def test_worker_antigo_nao_sobrescreve_tentativa_recuperada(client, compiled):
+    state = client.app.state
+    job_id = _queue_job(client, compiled)
+    old_entered = threading.Event()
+    release_old = threading.Event()
+
+    class OldExporter:
+        def export(self, *, ir, layout, content, assets_dir, out_path, **kwargs):
+            old_entered.set()
+            assert release_old.wait(timeout=10)
+            out_path.write_bytes(b"resultado-antigo")
+            return ExportOutcome(
+                out_path,
+                run_static_checks(ir, layout, content, assets_dir),
+            )
+
+    old_result = []
+    old_thread = threading.Thread(
+        target=lambda: old_result.append(
+            run_next_job(
+                state.session_factory,
+                storage=state.storage,
+                exporter=OldExporter(),
+                settings=state.settings,
+                lease_timeout=timedelta(0),
+                heartbeat_seconds=60,
+            )
+        )
+    )
+    old_thread.start()
+    assert old_entered.wait(timeout=10)
+
+    class NewExporter:
+        def export(self, *, ir, layout, content, assets_dir, out_path, **kwargs):
+            out_path.write_bytes(b"resultado-novo")
+            return ExportOutcome(
+                out_path,
+                run_static_checks(ir, layout, content, assets_dir),
+            )
+
+    assert run_next_job(
+        state.session_factory,
+        storage=state.storage,
+        exporter=NewExporter(),
+        settings=state.settings,
+        lease_timeout=timedelta(0),
+        heartbeat_seconds=0.03,
+    )
+    release_old.set()
+    old_thread.join(timeout=10)
+
+    job = _job(client, job_id)
+    assert old_result == [True]
+    assert job["status"] == "succeeded"
+    assert state.storage.get(job["result"]["sha256"]) == b"resultado-novo"
 
 
 def test_worker_ignora_outcome_externo_e_publica_out_path(client, compiled, tmp_path):

@@ -6,15 +6,17 @@ import os
 import re
 import shutil
 import stat
+import threading
 import time
 from contextlib import suppress
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from brand_api.config import Settings
-from brand_api.db import make_engine, make_session_factory
+from brand_api.db import make_engine, make_session_factory, new_id
 from brand_api.exporters import (
     Exporter,
     ExportOutcome,
@@ -28,6 +30,10 @@ from brand_runtime import BrandIR, ContentSpec, GuardCheck, LayoutSpec
 from brand_runtime.kit.models import ImageValue
 
 _JOB_ID_RE = re.compile(r"^job_[0-9a-f]{12}$")
+_LEASE_ID_RE = re.compile(r"^lease_[0-9a-f]{12}$")
+_LEASE_KEY = "_leaseId"
+_LEASE_TIMEOUT = timedelta(minutes=5)
+_HEARTBEAT_SECONDS = 30.0
 _WINDOWS_RESERVED_NAMES = {
     "CON",
     "PRN",
@@ -174,32 +180,134 @@ def _serialize_checks(checks: list[GuardCheck]) -> list[dict]:
     ]
 
 
-def _claim_next_job(session_factory) -> str | None:
-    """Reivindica atomicamente o próximo job e libera o lock antes do render."""
+@dataclass(frozen=True)
+class _JobLease:
+    """Identifica uma tentativa de processamento e cerca workers antigos."""
+
+    job_id: str
+    lease_id: str
+
+
+class _LeaseLost(RuntimeError):
+    """Indica que outra tentativa recuperou o job antes desta terminar."""
+
+
+def _owns_lease(job: Job, lease_id: str) -> bool:
+    """Confirma que o job ainda está em execução pela tentativa informada."""
+    return (
+        job.status == "running"
+        and isinstance(job.params, dict)
+        and job.params.get(_LEASE_KEY) == lease_id
+    )
+
+
+def _claim_next_job(
+    session_factory,
+    *,
+    lease_timeout: timedelta = _LEASE_TIMEOUT,
+) -> _JobLease | None:
+    """Reivindica um job queued ou recupera um running cujo lease expirou."""
+    if lease_timeout < timedelta(0):
+        raise ValueError("A duração do lease não pode ser negativa.")
+    now = datetime.now(UTC)
+    stale_before = now - lease_timeout
     with session_factory() as session:
         job = session.scalars(
             select(Job)
-            .where(Job.status == "queued")
+            .where(
+                or_(
+                    Job.status == "queued",
+                    and_(
+                        Job.status == "running",
+                        or_(Job.started_at.is_(None), Job.started_at < stale_before),
+                    ),
+                )
+            )
             .order_by(Job.created_at, Job.id)
             .with_for_update(skip_locked=True)
             .limit(1)
         ).first()
         if job is None:
             return None
+        lease_id = new_id("lease")
+        params = dict(job.params) if isinstance(job.params, dict) else {}
+        params[_LEASE_KEY] = lease_id
+        job.params = params
         job.status = "running"
-        job.started_at = datetime.now(UTC)
+        job.started_at = now
+        job.finished_at = None
         job.error = None
         job.result = None
-        job_id = job.id
         session.commit()
-        return job_id
+        return _JobLease(job_id=job.id, lease_id=lease_id)
 
 
-def _load_export_contract(session_factory, job_id: str):
+def _renew_lease(session_factory, lease: _JobLease) -> bool:
+    """Renova o heartbeat somente se a tentativa ainda possuir o job."""
+    with session_factory() as session:
+        job = session.scalars(select(Job).where(Job.id == lease.job_id).with_for_update()).first()
+        if job is None or not _owns_lease(job, lease.lease_id):
+            return False
+        job.started_at = datetime.now(UTC)
+        session.commit()
+        return True
+
+
+class _LeaseHeartbeat:
+    """Mantém o lease vivo durante renders longos e detecta perda de posse."""
+
+    def __init__(self, session_factory, lease: _JobLease, interval_seconds: float) -> None:
+        if interval_seconds <= 0:
+            raise ValueError("O intervalo do heartbeat precisa ser positivo.")
+        self._session_factory = session_factory
+        self._lease = lease
+        self._interval_seconds = interval_seconds
+        self._stop = threading.Event()
+        self._lost = threading.Event()
+        self._error: Exception | None = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"heartbeat-{lease.job_id}",
+            daemon=True,
+        )
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval_seconds):
+            try:
+                if not _renew_lease(self._session_factory, self._lease):
+                    self._lost.set()
+                    return
+            except Exception as exc:  # pragma: no cover - falha do driver varia por ambiente
+                self._error = exc
+                self._lost.set()
+                return
+
+    def __enter__(self) -> _LeaseHeartbeat:
+        self._thread.start()
+        return self
+
+    def ensure_owned(self) -> None:
+        """Falha fechado antes de publicar se o heartbeat perdeu o lease."""
+        if self._lost.is_set():
+            raise _LeaseLost("O lease do job foi recuperado por outro worker.") from self._error
+        try:
+            owned = _renew_lease(self._session_factory, self._lease)
+        except Exception as exc:
+            raise _LeaseLost("Não foi possível confirmar o lease do job.") from exc
+        if not owned:
+            self._lost.set()
+            raise _LeaseLost("O lease do job foi recuperado por outro worker.")
+
+    def __exit__(self, _exc_type, _exc, _traceback) -> None:
+        self._stop.set()
+        self._thread.join(timeout=min(max(self._interval_seconds * 2, 1.0), 5.0))
+
+
+def _load_export_contract(session_factory, lease: _JobLease):
     """Carrega e valida o snapshot persistido necessário ao export."""
     with session_factory() as session:
-        job = session.get(Job, job_id)
-        if job is None or job.status != "running" or job.kind != "export":
+        job = session.get(Job, lease.job_id)
+        if job is None or not _owns_lease(job, lease.lease_id) or job.kind != "export":
             raise RuntimeError("O job reivindicado não está disponível para export.")
         document = session.get(Document, job.document_id)
         if document is None:
@@ -232,12 +340,12 @@ def _load_export_contract(session_factory, job_id: str):
         )
 
 
-def _safe_job_workdir(work_root: Path, job_id: str) -> Path:
-    """Deriva uma pasta de job estritamente contida na raiz configurada."""
-    if not _JOB_ID_RE.fullmatch(job_id):
-        raise ValueError("O identificador do job não é seguro para o workdir.")
+def _safe_job_workdir(work_root: Path, lease: _JobLease) -> Path:
+    """Deriva uma pasta por tentativa, sem colisão com um worker recuperado."""
+    if not _JOB_ID_RE.fullmatch(lease.job_id) or not _LEASE_ID_RE.fullmatch(lease.lease_id):
+        raise ValueError("O identificador do job ou do lease não é seguro para o workdir.")
     _ensure_regular_directory(work_root)
-    destination = work_root / job_id
+    destination = work_root / f"{lease.job_id}-{lease.lease_id}"
     if destination.exists() or _is_link(destination):
         raise ValueError("O diretório de trabalho do job já existe.")
     if destination.parent.resolve(strict=True) != work_root.resolve(strict=True):
@@ -263,20 +371,23 @@ def _read_exact_output(out_path: Path, workdir: Path, workdir_identity: Path) ->
 
 def _finish_success(
     session_factory,
-    job_id: str,
+    lease: _JobLease,
     document_id: str,
     checks: list[dict],
     sha256: str,
 ) -> None:
     """Persiste o resultado publicado e o verdict completo em uma transação."""
     with session_factory() as session:
-        job = session.get(Job, job_id)
+        job = session.scalars(select(Job).where(Job.id == lease.job_id).with_for_update()).first()
         document = session.get(Document, document_id)
-        if job is None or job.status != "running" or document is None:
-            raise RuntimeError("O job mudou de estado antes de concluir o export.")
+        if job is None or not _owns_lease(job, lease.lease_id):
+            raise _LeaseLost("O job mudou de lease antes de concluir o export.")
+        if document is None:
+            raise RuntimeError("O documento do job não existe ao concluir o export.")
         job.checks = checks
         document.checks = checks
         job.status = "succeeded"
+        job.params = {key: value for key, value in job.params.items() if key != _LEASE_KEY}
         job.result = {"sha256": sha256, "url": f"/v1/assets/{sha256}"}
         job.error = None
         job.finished_at = datetime.now(UTC)
@@ -285,18 +396,19 @@ def _finish_success(
 
 def _finish_failure(
     session_factory,
-    job_id: str,
+    lease: _JobLease,
     *,
     error: str,
     checks: list[dict] | None = None,
     document_id: str | None = None,
-) -> None:
+) -> bool:
     """Fecha o job como falha, sem jamais associar um blob de resultado."""
     with session_factory() as session:
-        job = session.get(Job, job_id)
-        if job is None:
-            return
+        job = session.scalars(select(Job).where(Job.id == lease.job_id).with_for_update()).first()
+        if job is None or not _owns_lease(job, lease.lease_id):
+            return False
         job.status = "failed"
+        job.params = {key: value for key, value in job.params.items() if key != _LEASE_KEY}
         job.result = None
         job.error = error
         job.finished_at = datetime.now(UTC)
@@ -307,6 +419,7 @@ def _finish_failure(
                 if document is not None:
                     document.checks = checks
         session.commit()
+        return True
 
 
 def run_next_job(
@@ -315,10 +428,14 @@ def run_next_job(
     storage: Storage,
     exporter: Exporter,
     settings: Settings,
+    lease_timeout: timedelta = _LEASE_TIMEOUT,
+    heartbeat_seconds: float = _HEARTBEAT_SECONDS,
 ) -> bool:
     """Processa no máximo um job, persistindo sucesso ou falha e limpando o workdir."""
-    job_id = _claim_next_job(session_factory)
-    if job_id is None:
+    if heartbeat_seconds <= 0:
+        raise ValueError("O intervalo do heartbeat precisa ser positivo.")
+    lease = _claim_next_job(session_factory, lease_timeout=lease_timeout)
+    if lease is None:
         return False
 
     workdir: Path | None = None
@@ -326,39 +443,45 @@ def run_next_job(
     document_id: str | None = None
     try:
         document_id, ir, layout, content, manifest, fmt = _load_export_contract(
-            session_factory, job_id
+            session_factory, lease
         )
-        workdir = _safe_job_workdir(settings.work_dir, job_id)
-        build_export_workdir(manifest, ir, content, storage, workdir)
-        workdir_identity = workdir.resolve(strict=True)
-        out_path = workdir / f"out.{fmt}"
-        outcome: ExportOutcome = exporter.export(
-            ir=ir,
-            layout=layout,
-            content=content,
-            assets_dir=workdir,
-            fmt=fmt,
-            out_path=out_path,
-        )
-        checks = _serialize_checks(outcome.checks)
-        if any(check["status"] == "blocked" for check in checks):
-            raise ExportRejected([GuardCheck.model_validate(check) for check in checks])
-        # Deliberadamente ignora outcome.path: só o destino pré-acordado pode ser publicado.
-        sha256 = storage.put(_read_exact_output(out_path, workdir, workdir_identity))
-        _finish_success(session_factory, job_id, document_id, checks, sha256)
+        workdir = _safe_job_workdir(settings.work_dir, lease)
+        with _LeaseHeartbeat(session_factory, lease, heartbeat_seconds) as heartbeat:
+            build_export_workdir(manifest, ir, content, storage, workdir)
+            workdir_identity = workdir.resolve(strict=True)
+            out_path = workdir / f"out.{fmt}"
+            outcome: ExportOutcome = exporter.export(
+                ir=ir,
+                layout=layout,
+                content=content,
+                assets_dir=workdir,
+                fmt=fmt,
+                out_path=out_path,
+            )
+            checks = _serialize_checks(outcome.checks)
+            if any(check["status"] == "blocked" for check in checks):
+                raise ExportRejected([GuardCheck.model_validate(check) for check in checks])
+            heartbeat.ensure_owned()
+            # Deliberadamente ignora outcome.path: só o destino pré-acordado pode ser publicado.
+            sha256 = storage.put(_read_exact_output(out_path, workdir, workdir_identity))
+            heartbeat.ensure_owned()
+            _finish_success(session_factory, lease, document_id, checks, sha256)
     except ExportRejected as exc:
         checks = _serialize_checks(exc.checks)
         _finish_failure(
             session_factory,
-            job_id,
+            lease,
             error="O render encontrou pendências — corrija antes de exportar.",
             checks=checks,
             document_id=document_id,
         )
+    except _LeaseLost:
+        # Outra tentativa possui o job; este worker só limpa seu workdir isolado.
+        pass
     except Exception as exc:
         _finish_failure(
             session_factory,
-            job_id,
+            lease,
             error=f"Falha no export: {exc}",
         )
     finally:
