@@ -1131,7 +1131,9 @@ def test_bad_contrast_detected_with_doctored_ir(brand_package):
 
 **Files:**
 - Create: `packages/engine/src/brand_runtime/cli.py`
+- Create: `packages/engine/src/brand_runtime/_io.py` (publicação atômica de arquivo/conjunto)
 - Modify: `packages/engine/src/brand_runtime/__init__.py` (API pública do mestre)
+- Modify: `packages/engine/src/brand_runtime/ir/schema.py` (publicação transacional do conjunto)
 - Modify: `packages/engine/README.md` (seção "Uso")
 - Test: `packages/engine/tests/test_cli.py`
 
@@ -1143,7 +1145,7 @@ def test_bad_contrast_detected_with_doctored_ir(brand_package):
   - `brandrt guard IR_JSON LAYOUT_JSON CONTENT_JSON --assets-dir DIR` (imprime `GuardVerdict` `{"checks":[...]}` em stdout; exit 0 se nenhum check está `blocked`, exit 3 se algum está — `fixed` é não bloqueante; stderr vazio nos dois casos)
   - `brandrt schemas --out-dir DIR` (chama `export_schemas` e gera os quatro contratos, incluindo `guard-verdict.schema.json`)
 
-Erros esperados de uso, leitura, JSON, validação Pydantic, `CompileError`, `KitGenerationError` ou I/O → mensagem PT-BR em stderr, stdout vazio e exit 2, sem traceback. A raiz `brand_runtime` reexporta `build_draft`, `compile_ir`, `generate_kit` e `run_static_checks`, a API pública fixada no plano-mestre.
+Erros esperados de uso, leitura, JSON, validação Pydantic, `CompileError`, `KitGenerationError` ou I/O → mensagem PT-BR em stderr, stdout vazio e exit 2, sem traceback; bugs fora da lista operacional não são mascarados. `extract` resolve `PACKAGE_DIR` antes de persistir `packageDir`. Kit e schemas são publicados como conjuntos por staging + swap + rollback; a publicação de schemas preserva o sidecar `schemas/LICENSE`. A raiz `brand_runtime` reexporta `build_draft`, `compile_ir`, `generate_kit` e `run_static_checks`, a API pública fixada no plano-mestre.
 
 - [ ] **Step 1: Teste falhando** `tests/test_cli.py` — o roteiro completo do motor:
 
