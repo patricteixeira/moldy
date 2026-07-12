@@ -4,12 +4,15 @@ Convenção do pacote informal:
 
 - PDFs de diretrizes: ``*.pdf`` na raiz do pacote ou em ``references/*.pdf``;
 - logos: ``assets/logos/*.svg`` e ``assets/logos/*.png``;
-- arquivos de fonte: ``fonts/*.ttf`` e ``fonts/*.otf``.
+- arquivos de fonte: ``fonts/*.ttf`` e ``fonts/*.otf``;
+- tokens DTCG (atalho estruturado): ``tokens.json`` ou ``*.tokens.json`` na raiz.
 
 A extração nunca decide sozinha: cada valor agregado vira candidato de uma
 pergunta de wizard, porque a autoridade final é a confirmação da pessoa
 (spec §5.3). Scores são normalizados por extrator, ponderados pela
-confiabilidade da fonte (SVG > raster > PDF) e fundidos perceptualmente.
+confiabilidade da fonte (DTCG > SVG > raster > PDF) e fundidos
+perceptualmente. Tokens DTCG ficam primeiros no ranking, mas continuam
+passando pelo wizard.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from PIL import Image
 
 from brand_runtime.colors import dedupe_colors, delta_e, is_neutral, lightness
 from brand_runtime.intake.base import Candidate
+from brand_runtime.intake.dtcg import load_dtcg
 from brand_runtime.intake.fonts import introspect_font
 from brand_runtime.intake.pdf_colors import extract_pdf_colors
 from brand_runtime.intake.pdf_fonts import extract_pdf_fonts
@@ -28,9 +32,11 @@ from brand_runtime.intake.raster_logo import extract_raster_colors
 from brand_runtime.intake.svg_logo import extract_svg_colors, svg_canvas_size
 from brand_runtime.ir.models import CamelModel, Diagnostic, Evidence
 
-# Pesos por fonte de evidência (regra 1): o logo vetorial é a amostra mais fiel
-# das cores da marca; o raster perde detalhe para anti-aliasing/compressão; o
-# PDF mistura cores da marca com cores editoriais do próprio documento.
+# Pesos por fonte de evidência (regra 1): tokens DTCG são intenção declarada,
+# acima de qualquer extração; o logo vetorial é a amostra mais fiel das cores
+# da marca; o raster perde detalhe para anti-aliasing/compressão; o PDF
+# mistura cores da marca com cores editoriais do próprio documento.
+_DTCG_WEIGHT = 5.0
 _SVG_WEIGHT = 3.0
 _RASTER_WEIGHT = 2.0
 _PDF_WEIGHT = 1.0
@@ -101,19 +107,43 @@ def _question(
     )
 
 
+def _dtcg_candidates(package_dir: Path) -> dict[str, Candidate]:
+    """Carrega os tokens DTCG do pacote (``tokens.json`` e ``*.tokens.json`` na raiz).
+
+    Vários arquivos são fundidos por chave semântica; para chaves repetidas,
+    vence o primeiro arquivo (``tokens.json`` antes dos ``*.tokens.json``,
+    estes em ordem alfabética).
+    """
+    canonical = package_dir / "tokens.json"
+    token_files = [
+        *([canonical] if canonical.is_file() else []),
+        *sorted(package_dir.glob("*.tokens.json")),
+    ]
+    merged: dict[str, Candidate] = {}
+    for token_file in token_files:
+        for key, candidate in load_dtcg(token_file).items():
+            merged.setdefault(key, candidate)
+    return merged
+
+
 def _color_candidates(
-    pdfs: list[Path], svg_logos: list[Path], png_logos: list[Path]
+    pdfs: list[Path],
+    svg_logos: list[Path],
+    png_logos: list[Path],
+    dtcg_colors: list[Candidate],
 ) -> list[Candidate]:
     """Funde as cores de todos os extratores em um ranking único (regra 1).
 
     Cada chamada de extrator é normalizada para máx=1.0, multiplicada pelo peso
     da fonte e somada por cor; cores perceptualmente próximas são fundidas com
-    ``dedupe_colors`` e as evidências do grupo são concatenadas.
+    ``dedupe_colors`` e as evidências do grupo são concatenadas. Tokens DTCG
+    entram como um "extrator" a mais, com o maior peso de fonte.
     """
     runs: list[tuple[list[Candidate], float]] = [
         *((extract_pdf_colors(path), _PDF_WEIGHT) for path in pdfs),
         *((extract_svg_colors(path), _SVG_WEIGHT) for path in svg_logos),
         *((extract_raster_colors(path), _RASTER_WEIGHT) for path in png_logos),
+        (dtcg_colors, _DTCG_WEIGHT),
     ]
     weights: dict[str, float] = {}
     evidence: dict[str, list[Evidence]] = {}
@@ -257,9 +287,13 @@ def _diagnostics(
     pdfs: list[Path],
     logo_candidates: list[Candidate],
     file_fonts: list[Candidate],
-    pdf_fonts: list[Candidate],
+    referenced_fonts: list[Candidate],
 ) -> list[Diagnostic]:
-    """Diagnósticos de lacunas do pacote (regra 10) — códigos exatos, mensagens PT-BR."""
+    """Diagnósticos de lacunas do pacote (regra 10) — códigos exatos, mensagens PT-BR.
+
+    ``referenced_fonts`` são as famílias apenas citadas (PDFs e tokens DTCG):
+    cada uma sem arquivo correspondente gera um ``FONT_FILE_MISSING``.
+    """
     diagnostics: list[Diagnostic] = []
     if not pdfs:
         diagnostics.append(
@@ -279,7 +313,7 @@ def _diagnostics(
         )
     available = {c.value["family"].casefold() for c in file_fonts}
     reported: set[str] = set()
-    for candidate in pdf_fonts:
+    for candidate in referenced_fonts:
         family = candidate.value["family"]
         key = family.casefold()
         if key in available or key in reported:
@@ -305,7 +339,12 @@ def build_draft(package_dir: Path) -> BrandDraft:
     Convenção do pacote: PDFs de diretrizes em ``*.pdf`` na raiz ou em
     ``references/*.pdf``; logos em ``assets/logos/*.svg`` e
     ``assets/logos/*.png``; arquivos de fonte em ``fonts/*.ttf`` e
-    ``fonts/*.otf``.
+    ``fonts/*.otf``; tokens DTCG em ``tokens.json`` ou ``*.tokens.json``
+    na raiz.
+
+    Candidatos DTCG entram com o maior peso de fonte (5.0, acima do SVG) e
+    ficam primeiros no ranking — mas continuam passando pelo wizard: a
+    autoridade permanece na confirmação (spec §5.3).
 
     Perguntas obrigatórias: ``color.primary``, ``color.background``,
     ``color.text``, ``font.heading``, ``font.body`` e ``logo.primary``;
@@ -322,7 +361,11 @@ def build_draft(package_dir: Path) -> BrandDraft:
     fonts_dir = package_dir / "fonts"
     font_files = [*sorted(fonts_dir.glob("*.ttf")), *sorted(fonts_dir.glob("*.otf"))]
 
-    colors = _color_candidates(pdfs, svg_logos, png_logos)
+    dtcg = _dtcg_candidates(package_dir)
+    dtcg_colors = [c for key, c in dtcg.items() if key.startswith("color.")]
+    dtcg_fonts = [c for key, c in dtcg.items() if key.startswith("font.")]
+
+    colors = _color_candidates(pdfs, svg_logos, png_logos, dtcg_colors)
     non_neutral = [c for c in colors if not is_neutral(c.value)]
     light_neutrals = [
         c
@@ -352,11 +395,14 @@ def build_draft(package_dir: Path) -> BrandDraft:
     secondary = non_neutral[_PRIMARY_TOP : _PRIMARY_TOP + _SECONDARY_TOP]
     if secondary:  # regra 5: pergunta opcional é omitida quando não há candidatas
         questions.append(_question("color.secondary", "pick-color", secondary, required=False))
+    # Grupos de candidatos de fonte, do mais ao menos confiável (spec §5.3):
+    # tokens DTCG (intenção declarada) > arquivos de fonte > citações em PDF.
     questions.append(
         _question(
             "font.heading",
             "pick-font",
             [
+                *_weight_partitioned(dtcg_fonts, heavy_first=True),
                 *_weight_partitioned(file_fonts, heavy_first=True),
                 *_weight_partitioned(pdf_fonts, heavy_first=True),
             ],
@@ -368,6 +414,7 @@ def build_draft(package_dir: Path) -> BrandDraft:
             "font.body",
             "pick-font",
             [
+                *_weight_partitioned(dtcg_fonts, heavy_first=False),
                 *_weight_partitioned(file_fonts, heavy_first=False),
                 *_weight_partitioned(pdf_fonts, heavy_first=False),
             ],
@@ -379,5 +426,5 @@ def build_draft(package_dir: Path) -> BrandDraft:
     return BrandDraft(
         package_dir=str(package_dir),
         questions=questions,
-        diagnostics=_diagnostics(pdfs, logo_candidates, file_fonts, pdf_fonts),
+        diagnostics=_diagnostics(pdfs, logo_candidates, file_fonts, [*dtcg_fonts, *pdf_fonts]),
     )

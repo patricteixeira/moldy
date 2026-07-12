@@ -90,13 +90,18 @@ _MALICIOUS_SVG = b"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 10
 </svg>"""
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def brand_package(tmp_path_factory, brand_pdf, fixture_font) -> Path:
     """Pacote informal de marca completo, na convenção de ``brand_runtime.intake.draft``.
 
     Contém ``manual.pdf`` (cópia de ``brand_pdf``), ``assets/logos/logo.svg``
     (o SVG hostil da Task 6 — passa pela sanitização) e
     ``fonts/fixture-sans-bold.ttf``. Reutilizada pelas Tasks 10 a 15.
+
+    Escopo de função (não de sessão): testes escrevem no pacote — ex.:
+    ``tokens.json`` em ``test_dtcg.py`` — e um diretório compartilhado
+    contaminaria os testes seguintes; cada teste recebe uma cópia isolada
+    (barata: três arquivos pequenos, gerados uma vez por sessão).
     """
     package = tmp_path_factory.mktemp("brand-package")
     shutil.copyfile(brand_pdf, package / "manual.pdf")
