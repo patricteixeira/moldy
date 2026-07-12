@@ -10,6 +10,7 @@ from brand_api.auth import mint_token
 from brand_api.config import Settings
 from brand_api.db import make_engine, make_session_factory
 from brand_api.models import Base
+from brand_api.worker import run_worker
 
 app = typer.Typer(
     add_completion=False,
@@ -42,6 +43,23 @@ def create_token_command(
     finally:
         engine.dispose()
     typer.echo(token)
+
+
+@app.command("worker")
+def worker_command(
+    poll_seconds: float = typer.Option(
+        1.0,
+        "--poll-seconds",
+        help="Intervalo de polling quando a fila está vazia.",
+    ),
+    once: bool = typer.Option(
+        False,
+        "--once",
+        help="Processa no máximo um job e encerra.",
+    ),
+) -> None:
+    """Executa o processo separado que consome a fila de exports."""
+    run_worker(Settings.from_env(), poll_seconds=poll_seconds, once=once)
 
 
 if __name__ == "__main__":  # pragma: no cover - entry point instalado cobre este caminho

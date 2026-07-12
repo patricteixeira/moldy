@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.alias_generators import to_camel
 
 from brand_api.auth import require_token
 from brand_api.db import new_id
-from brand_api.models import BrandRevision, Document
+from brand_api.models import BrandRevision, Document, Job
 from brand_runtime import BrandIR, ContentSpec, LayoutSpec, run_static_checks
 from brand_runtime.kit.models import ImageValue
 
@@ -27,6 +28,14 @@ class DocumentBody(BaseModel):
     layout_id: str = Field(min_length=1)
     brand_revision_id: str = Field(min_length=1)
     values: dict[str, Any]
+
+
+class ExportBody(BaseModel):
+    """Formato fechado aceito ao enfileirar um export."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    format: Literal["png", "pdf"]
 
 
 def _layout_from_revision(revision: BrandRevision, layout_id: str) -> LayoutSpec:
@@ -102,3 +111,68 @@ def create_document(body: DocumentBody, request: Request) -> dict[str, Any]:
         session.commit()
 
     return {"documentId": document_id, "checks": serialized_checks}
+
+
+@router.post(
+    "/documents/{document_id}/exports",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=None,
+)
+def enqueue_export(
+    document_id: str,
+    body: ExportBody,
+    request: Request,
+) -> Any:
+    """Reexecuta o Guard e enfileira somente documentos autorizados."""
+    with request.app.state.session_factory() as session:
+        document = session.get(Document, document_id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Documento não encontrado.",
+            )
+        revision = session.get(BrandRevision, document.brand_revision_id)
+        if revision is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Revisão de marca não encontrada.",
+            )
+
+        layout = _layout_from_revision(revision, document.layout_id)
+        if body.format == "pdf" and layout.profile != "doc-a4":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Exporte PDF apenas para documentos (A4).",
+            )
+
+        ir = BrandIR.model_validate(revision.ir)
+        content = ContentSpec.model_validate(document.content)
+        checks = run_static_checks(
+            ir,
+            layout,
+            content,
+            request.app.state.settings.storage_dir,
+        )
+        serialized_checks = [item.model_dump(mode="json", by_alias=True) for item in checks]
+        if any(item.status == "blocked" for item in checks):
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "detail": "O documento tem pendências do guard — corrija antes de exportar.",
+                    "checks": serialized_checks,
+                },
+            )
+
+        job_id = new_id("job")
+        session.add(
+            Job(
+                id=job_id,
+                kind="export",
+                document_id=document.id,
+                params={"format": body.format},
+                status="queued",
+                checks=serialized_checks,
+            )
+        )
+        session.commit()
+    return {"jobId": job_id}
