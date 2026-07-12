@@ -9,8 +9,9 @@ PDF, logos, fontes, cores anotadas), transforma tudo num **Brand IR**
 versionado e gera trilhos (kits de layout com slots) dentro dos quais qualquer
 pessoa produz posts, documentos e materiais corretos em relação à marca.
 
-**Status: em construção** — o motor Python e sua CLI (Plano 1) estão
-concluídos; render, API, app web e o E2E do Marco 1 continuam pendentes.
+**Status: em construção** — o motor Python/CLI (Plano 1) e o renderer com
+export PNG/PDF (Plano 2) estão concluídos; API, app web e o E2E do Marco 1
+continuam pendentes.
 A spec fundadora está em
 [`docs/superpowers/specs/2026-07-11-brand-runtime-design.md`](docs/superpowers/specs/2026-07-11-brand-runtime-design.md).
 
@@ -18,15 +19,16 @@ A spec fundadora está em
 
 ```
 packages/engine/   Motor Python: intake (extração + confirmação), Brand IR,
-                   gerador de kit, guard estático, CLI `brandrt`
+                   gerador de kit, Guard, CLI e export Playwright
+packages/render/   Biblioteca TypeScript única de preview/export, DOM 1:1 px
 schemas/           JSON Schemas públicos do motor (licença MIT)
 docs/              Spec fundadora, planos de implementação e ADRs
 ENGINEERING.md     Padrões de engenharia e segurança do projeto
 ```
 
-Componentes previstos pelo plano-mestre do M1 (`docs/superpowers/plans/`):
-`packages/render` (biblioteca TS de render — preview e export do mesmo código),
-`apps/api` (FastAPI) e `apps/web` (wizard + editor por slots).
+Componentes ainda previstos pelo plano-mestre do M1
+(`docs/superpowers/plans/`): `apps/api` (FastAPI) e `apps/web` (wizard + editor
+por slots).
 
 ## Como rodar o motor (engine)
 

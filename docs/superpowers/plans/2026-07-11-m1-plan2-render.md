@@ -1,5 +1,12 @@
 # Plano 2 — Render e Export (TypeScript + Playwright) Implementation Plan
 
+**Status:** concluído em 12/07/2026. As nove tarefas foram implementadas e
+integradas na branch `m1-walking-skeleton`; API e web pertencem aos Planos 3–4.
+
+> **Registro histórico:** os checkboxes abaixo preservam o roteiro normativo
+> original e não representam o progresso atual. O status acima, os gates do CI
+> e o histórico de commits são a fonte de verdade da execução.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Formato deste plano:** os testes de cada tarefa são o contrato completo e obrigatório — implemente por TDD até que passem sem alterá-los (mudança em teste = desvio a reportar). Assinaturas, regras e tabelas dadas aqui são normativas. Onde o corpo da implementação não está escrito, ele é livre desde que os testes e as regras sejam satisfeitos.
@@ -1218,7 +1225,9 @@ def test_pdf_doc_a4_uma_pagina_deterministico(brand_package, render_dist, tmp_pa
     reader = PdfReader(str(a.out_path))
     assert len(reader.pages) == 1
     box = reader.pages[0].mediabox
-    assert round(float(box.width)) == 595 and round(float(box.height)) == 842  # A4 em pt
+    # A4 matemático em pt; Chromium 149 quantiza o MediaBox em até ~1 pt.
+    assert abs(float(box.width) - 595.276) <= 1.1
+    assert abs(float(box.height) - 841.890) <= 1.1
 
 
 def test_pdf_fora_do_doc_a4_recusado(brand_package, render_dist, tmp_path):

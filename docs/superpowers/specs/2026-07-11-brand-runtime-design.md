@@ -2,7 +2,8 @@
 
 **Nome de trabalho:** brand-runtime (batismo pendente — §10)
 **Status:** spec fundadora v1 — aprovada em 11/07/2026 e reconciliada em
-12/07/2026 com as ADRs 0001–0007 e o motor concluído do Plano 1
+12/07/2026 com as ADRs 0001–0007, o motor do Plano 1 e o render/export do
+Plano 2 concluídos
 **Substitui como referência de produto:** `brand-compiler-projeto (1).md`, `brand-compiler-system-design.md`, `brand-compiler-roadmap.md` e a pesquisa de mercado. O destino de cada documento anterior está no §11 — nada foi descartado sem endereço.
 
 ---
@@ -277,10 +278,11 @@ No mundo de slots, a maior parte das violações do linter anterior é **estrutu
 - **Área segura** — garantida por construção nos layouts; checada no conteúdo que pode vazar.
 
 Tudo determinístico e auditável, com mensagens em linguagem de gente e ação de
-correção clara. No motor concluído do Plano 1, o Guard estático emite `pass` ou
-`blocked`; `fixed` permanece no contrato compartilhado, mas nenhuma correção é
-aplicada silenciosamente. Overflow medido, fallback de fonte e contraste sobre
-imagem precisam ser integrados ao verdict nos Planos 2 e 3. Severidades formais
+correção clara. O motor do Plano 1 emite os checks estáticos; o Plano 2 integrou
+overflow e fallback de fonte medidos ao mesmo verdict: overflow/falha de carga
+bloqueia, enquanto uma substituição tipográfica prevista é registrada como
+`fixed`. Contraste sobre imagem permanece fora deste walking skeleton. Nenhuma
+correção altera conteúdo silenciosamente. Severidades formais
 (`info`/`warning`/`error`/`locked`) só entram no M3, onde há edição livre para
 justificá-las.
 
@@ -307,10 +309,10 @@ confiável da instância no M1.
 
 ### M1 — "A marca instalada"
 
-**Estado em 12/07/2026:** o motor arquivo→arquivo do Plano 1 está concluído
-(intake, confirmação, Brand IR, kit, Guard, CLI e schemas). Render/export, API,
-app web, Docker Compose e E2E permanecem pendentes nos Planos 2–4; portanto o
-M1 ainda não está concluído.
+**Estado em 12/07/2026:** o motor arquivo→arquivo do Plano 1 e o render/export
+do Plano 2 estão concluídos (renderer único, Guard medido, PNG/PDF e prova de
+equivalência de pixels). API, app web, Docker Compose e E2E permanecem
+pendentes nos Planos 3–4; portanto o M1 ainda não está concluído.
 
 **Walking skeleton** (disciplina herdada do roadmap anterior — nada de expansão antes deste roteiro funcionar de ponta a ponta):
 
