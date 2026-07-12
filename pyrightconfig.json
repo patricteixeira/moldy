@@ -1,0 +1,6 @@
+{
+  "venvPath": "packages/engine",
+  "venv": ".venv",
+  "extraPaths": ["packages/engine/src"],
+  "exclude": ["**/.venv", "**/node_modules", "**/__pycache__"]
+}
