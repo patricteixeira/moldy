@@ -1,6 +1,11 @@
 import pytest
 from brand_runtime.colors import (
-    normalize_color, delta_e, dedupe_colors, wcag_contrast, lightness, is_neutral,
+    normalize_color,
+    delta_e,
+    dedupe_colors,
+    wcag_contrast,
+    lightness,
+    is_neutral,
 )
 
 
@@ -22,7 +27,7 @@ def test_delta_e_identical_is_zero():
 
 def test_dedupe_merges_near_colors():
     result = dedupe_colors([("#1A4D8F", 5.0), ("#1B4E90", 3.0), ("#F4A300", 2.0)])
-    assert result[0] == ("#1A4D8F", 8.0)   # vizinhas fundidas, score somado
+    assert result[0] == ("#1A4D8F", 8.0)  # vizinhas fundidas, score somado
     assert result[1] == ("#F4A300", 2.0)
 
 

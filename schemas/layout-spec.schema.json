@@ -1,0 +1,419 @@
+{
+  "$defs": {
+    "Background": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "color"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "colorToken": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "colorToken"
+            ]
+          }
+        }
+      ],
+      "description": "Fundo sólido por token de cor ou fornecido por um slot de imagem.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "color",
+            "image-slot"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "colorToken": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colortoken"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Background",
+      "type": "object"
+    },
+    "Canvas": {
+      "additionalProperties": false,
+      "description": "Dimensões e margem segura de um perfil de saída, em pixels.",
+      "properties": {
+        "widthPx": {
+          "exclusiveMinimum": 0,
+          "title": "Widthpx",
+          "type": "integer"
+        },
+        "heightPx": {
+          "exclusiveMinimum": 0,
+          "title": "Heightpx",
+          "type": "integer"
+        },
+        "safeAreaPx": {
+          "minimum": 0,
+          "title": "Safeareapx",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "widthPx",
+        "heightPx",
+        "safeAreaPx"
+      ],
+      "title": "Canvas",
+      "type": "object"
+    },
+    "Slot": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "text"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "role": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "role"
+            ]
+          }
+        }
+      ],
+      "description": "Região editável de um layout, com limites para adaptação e validação.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "text",
+            "image",
+            "logo"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "maxChars": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxchars"
+        },
+        "minResolution": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minresolution"
+        },
+        "area": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "title": "Area",
+          "type": "array"
+        },
+        "fit": {
+          "default": "shrink-within-role-range",
+          "enum": [
+            "shrink-within-role-range",
+            "fixed"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "area"
+      ],
+      "title": "Slot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "post-1x1"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "canvas": {
+            "properties": {
+              "widthPx": {
+                "const": 1080
+              },
+              "heightPx": {
+                "const": 1080
+              },
+              "safeAreaPx": {
+                "const": 48
+              }
+            },
+            "required": [
+              "widthPx",
+              "heightPx",
+              "safeAreaPx"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "post-4x5"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "canvas": {
+            "properties": {
+              "widthPx": {
+                "const": 1080
+              },
+              "heightPx": {
+                "const": 1350
+              },
+              "safeAreaPx": {
+                "const": 48
+              }
+            },
+            "required": [
+              "widthPx",
+              "heightPx",
+              "safeAreaPx"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "story-9x16"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "canvas": {
+            "properties": {
+              "widthPx": {
+                "const": 1080
+              },
+              "heightPx": {
+                "const": 1920
+              },
+              "safeAreaPx": {
+                "const": 64
+              }
+            },
+            "required": [
+              "widthPx",
+              "heightPx",
+              "safeAreaPx"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "profile": {
+            "const": "doc-a4"
+          }
+        },
+        "required": [
+          "profile"
+        ]
+      },
+      "then": {
+        "properties": {
+          "canvas": {
+            "properties": {
+              "widthPx": {
+                "const": 794
+              },
+              "heightPx": {
+                "const": 1123
+              },
+              "safeAreaPx": {
+                "const": 76
+              }
+            },
+            "required": [
+              "widthPx",
+              "heightPx",
+              "safeAreaPx"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "description": "Layout declarativo adaptado para um dos perfis publicados pelo motor.",
+  "properties": {
+    "id": {
+      "minLength": 1,
+      "pattern": ".*\\S.*",
+      "title": "Id",
+      "type": "string"
+    },
+    "profile": {
+      "enum": [
+        "post-1x1",
+        "post-4x5",
+        "story-9x16",
+        "doc-a4"
+      ],
+      "title": "Profile",
+      "type": "string"
+    },
+    "namePt": {
+      "minLength": 1,
+      "pattern": ".*\\S.*",
+      "title": "Namept",
+      "type": "string"
+    },
+    "canvas": {
+      "$ref": "#/$defs/Canvas"
+    },
+    "background": {
+      "$ref": "#/$defs/Background"
+    },
+    "slots": {
+      "items": {
+        "$ref": "#/$defs/Slot"
+      },
+      "title": "Slots",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "profile",
+    "namePt",
+    "canvas",
+    "background",
+    "slots"
+  ],
+  "title": "LayoutSpec",
+  "type": "object"
+}

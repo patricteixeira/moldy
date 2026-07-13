@@ -1,9 +1,15 @@
 __pycache__/
 *.pyc
 .venv/
+.env
+.env.*
+!.env.example
 .pytest_cache/
 .ruff_cache/
 dist/
 node_modules/
 out/
 *.egg-info/
+apps/web/e2e/.fixtures/
+test-results/
+playwright-report/

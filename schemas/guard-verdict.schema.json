@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "GuardCheck": {
+      "additionalProperties": false,
+      "description": "Resultado serializável de uma regra do Brand Guard.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "slotId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slotid"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fixed",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "messagePt": {
+          "title": "Messagept",
+          "type": "string"
+        },
+        "detail": {
+          "additionalProperties": true,
+          "title": "Detail",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "messagePt"
+      ],
+      "title": "GuardCheck",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Artefato compartilhado que envolve a sequência ordenada de checks.",
+  "properties": {
+    "checks": {
+      "items": {
+        "$ref": "#/$defs/GuardCheck"
+      },
+      "title": "Checks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "checks"
+  ],
+  "title": "GuardVerdict",
+  "type": "object"
+}

@@ -1,0 +1,98 @@
+{
+  "$defs": {
+    "ImageValue": {
+      "additionalProperties": false,
+      "description": "Imagem fornecida para um slot, opcionalmente acompanhada de seu hash.",
+      "properties": {
+        "kind": {
+          "const": "image",
+          "default": "image",
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "ImageValue",
+      "type": "object"
+    },
+    "TextValue": {
+      "additionalProperties": false,
+      "description": "Conteúdo textual fornecido para um slot.",
+      "properties": {
+        "kind": {
+          "const": "text",
+          "default": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Conteúdo de uma peça ligado a um layout e a uma revisão de marca.",
+  "properties": {
+    "layoutId": {
+      "minLength": 1,
+      "pattern": ".*\\S.*",
+      "title": "Layoutid",
+      "type": "string"
+    },
+    "brandRevisionId": {
+      "minLength": 1,
+      "pattern": ".*\\S.*",
+      "title": "Brandrevisionid",
+      "type": "string"
+    },
+    "values": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/TextValue"
+          },
+          {
+            "$ref": "#/$defs/ImageValue"
+          }
+        ]
+      },
+      "title": "Values",
+      "type": "object"
+    }
+  },
+  "required": [
+    "layoutId",
+    "brandRevisionId",
+    "values"
+  ],
+  "title": "ContentSpec",
+  "type": "object"
+}

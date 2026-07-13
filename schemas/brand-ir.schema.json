@@ -1,0 +1,403 @@
+{
+  "$defs": {
+    "BrandInfo": {
+      "additionalProperties": false,
+      "description": "Metadados essenciais da marca compilada.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "BrandInfo",
+      "type": "object"
+    },
+    "ColorToken": {
+      "additionalProperties": false,
+      "description": "Cor semântica normalizada com sua cadeia de evidências.",
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "evidence"
+      ],
+      "title": "ColorToken",
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "description": "Lacuna ou decisão pendente comunicada em linguagem orientada à ação.",
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution"
+        }
+      },
+      "required": [
+        "code",
+        "target",
+        "message"
+      ],
+      "title": "Diagnostic",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Rastro de origem de um valor da marca, com confiança e autoridade.",
+      "properties": {
+        "sourceType": {
+          "enum": [
+            "pdf-guideline",
+            "svg-asset",
+            "raster-asset",
+            "font-file",
+            "dtcg-tokens",
+            "wizard-confirmation",
+            "manual-entry"
+          ],
+          "title": "Sourcetype",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "authoritative": {
+          "default": false,
+          "title": "Authoritative",
+          "type": "boolean"
+        },
+        "confirmedAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmedat"
+        }
+      },
+      "required": [
+        "sourceType",
+        "confidence"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "FontToken": {
+      "additionalProperties": false,
+      "description": "Fonte semântica confirmada, ligada ou não a um arquivo local.",
+      "properties": {
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "weight": {
+          "default": 400,
+          "maximum": 900,
+          "minimum": 100,
+          "title": "Weight",
+          "type": "integer"
+        },
+        "style": {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "italic"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "file",
+            "referenced-only",
+            "fallback"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "fileSha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Filesha256"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "family",
+        "source",
+        "evidence"
+      ],
+      "title": "FontToken",
+      "type": "object"
+    },
+    "LogoAsset": {
+      "additionalProperties": false,
+      "description": "Asset de logo publicado com integridade e proveniência confirmada.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "svg",
+            "png"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "minWidthPx": {
+          "default": 96,
+          "title": "Minwidthpx",
+          "type": "integer"
+        },
+        "clearSpaceRatio": {
+          "default": 0.25,
+          "title": "Clearspaceratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "format",
+        "evidence"
+      ],
+      "title": "LogoAsset",
+      "type": "object"
+    },
+    "RevisionInfo": {
+      "additionalProperties": false,
+      "description": "Identidade determinística e instante de auditoria de uma revisão.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "createdAt"
+      ],
+      "title": "RevisionInfo",
+      "type": "object"
+    },
+    "SemanticRole": {
+      "additionalProperties": false,
+      "description": "Papel tipográfico que referencia tokens de fonte e cor do Brand IR.",
+      "properties": {
+        "font": {
+          "title": "Font",
+          "type": "string"
+        },
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "minSizePx": {
+          "title": "Minsizepx",
+          "type": "integer"
+        },
+        "maxSizePx": {
+          "title": "Maxsizepx",
+          "type": "integer"
+        },
+        "lineHeight": {
+          "title": "Lineheight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "font",
+        "color",
+        "minSizePx",
+        "maxSizePx",
+        "lineHeight"
+      ],
+      "title": "SemanticRole",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Contrato imutável da marca consumido pelo kit, guard e renderer.",
+  "properties": {
+    "schemaVersion": {
+      "const": "0.1.0",
+      "default": "0.1.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "brand": {
+      "$ref": "#/$defs/BrandInfo"
+    },
+    "revision": {
+      "$ref": "#/$defs/RevisionInfo"
+    },
+    "colors": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ColorToken"
+      },
+      "title": "Colors",
+      "type": "object"
+    },
+    "fonts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/FontToken"
+      },
+      "title": "Fonts",
+      "type": "object"
+    },
+    "roles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/SemanticRole"
+      },
+      "title": "Roles",
+      "type": "object"
+    },
+    "assets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/LogoAsset"
+      },
+      "title": "Assets",
+      "type": "object"
+    },
+    "formatProfiles": {
+      "default": [
+        "post-1x1",
+        "post-4x5",
+        "story-9x16",
+        "doc-a4"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Formatprofiles",
+      "type": "array"
+    },
+    "diagnostics": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    }
+  },
+  "required": [
+    "brand",
+    "revision",
+    "colors",
+    "fonts",
+    "roles",
+    "assets"
+  ],
+  "title": "BrandIR",
+  "type": "object"
+}

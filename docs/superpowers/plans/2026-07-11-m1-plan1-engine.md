@@ -1,6 +1,12 @@
 # Plano 1 — Motor da marca (Python) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** concluído em 12/07/2026. As 15 tarefas foram implementadas e
+integradas na branch `m1-walking-skeleton`; render, API e web pertencem aos
+Planos 2–4.
+
+> **Registro histórico:** os checkboxes abaixo preservam o roteiro normativo
+> original e não representam o progresso atual. O status acima e o histórico
+> de commits são a fonte de verdade da execução.
 >
 > **Formato deste plano:** os testes de cada tarefa são o contrato completo e obrigatório — implemente por TDD até que passem sem alterá-los (mudança em teste = desvio a reportar). Assinaturas, regras e tabelas dadas aqui são normativas. Onde o corpo da implementação não está escrito, ele é livre desde que os testes e as regras sejam satisfeitos.
 
@@ -19,7 +25,7 @@
 - Determinismo: `compile_ir` recebe `created_at` injetável; id de revisão derivado de hash do conteúdo (nunca de relógio/aleatório).
 - Uploads são hostis: SVG passa por sanitização antes de qualquer parse de cor (spec §5.3).
 - Antes de cada commit: `.venv/Scripts/python -m pytest packages/engine -q` verde e `.venv/Scripts/python -m ruff check packages/engine` limpo (comandos a partir de `packages/engine`, ver Task 1).
-- Commits na branch `m1-walking-skeleton`, mensagem `feat(engine): <resumo>` + trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
+- Commits na branch `m1-walking-skeleton`, mensagem `feat(engine): <resumo>`.
 - Nunca editar este arquivo de plano nem os documentos em `docs/` (o orquestrador rastreia progresso fora do arquivo).
 
 ---
@@ -223,6 +229,7 @@ class LogoAsset(CamelModel):
     path: str
     sha256: str
     format: Literal["svg", "png"]
+    evidence: list[Evidence]
     min_width_px: int = 96
     clear_space_ratio: float = 0.25
 
@@ -282,7 +289,8 @@ def _minimal_ir() -> BrandIR:
         fonts={"font.heading": FontToken(family="Archivo", weight=700, source="referenced-only", evidence=[ev])},
         roles={"heading": SemanticRole(font="font.heading", color="color.primary",
                                        min_size_px=40, max_size_px=96, line_height=1.1)},
-        assets={"logo.primary": LogoAsset(path="assets/logos/a.svg", sha256="0" * 64, format="svg")},
+        assets={"logo.primary": LogoAsset(path="assets/logos/a.svg", sha256="0" * 64,
+                                           format="svg", evidence=[ev])},
     )
 
 
@@ -752,18 +760,18 @@ def compile_ir(draft: BrandDraft, answers: Answers, brand_name: str,
 
 - Regras normativas:
   1. obrigatórios: `color.primary`, `color.background`, `color.text`, `font.heading`, `font.body`, `logo.primary` — ausentes em `answers.values` → `CompileError` com todos os faltantes;
-  2. valor respondido que coincide com um candidato (cores comparadas após `normalize_color`; fontes por `family`+`weight`; logo por path) herda as evidências do candidato e recebe **adicionalmente** `Evidence(source_type="wizard-confirmation", confidence=1.0, authoritative=True, confirmed_at=created_at)`; valor que não coincide com nenhum candidato recebe apenas a evidência de confirmação;
+  2. valor respondido que coincide com um candidato (cores comparadas após `normalize_color`; fontes por `family`+`weight`, com `path` apenas como desempate seguro entre candidatas idênticas; logo por path) herda as evidências do candidato e recebe **adicionalmente** `Evidence(source_type="wizard-confirmation", confidence=1.0, authoritative=True, confirmed_at=created_at)`; valor que não coincide com nenhum candidato recebe apenas a evidência de confirmação; isso vale também para `LogoAsset.evidence`;
   3. fontes: se o candidato escolhido tem `"path"` no value → `source="file"`, `file_sha256` = SHA-256 do arquivo; senão `source="referenced-only"` + Diagnostic `FONT_FILE_MISSING` com `resolution="render-fallback"`;
   4. logo: `sha256` do arquivo; `format` pela extensão; path relativo ao pacote;
   5. roles fixos: `heading {font.heading, color.primary, 40..96, lh 1.1}`, `body {font.body, color.text, 16..24, lh 1.5}`, `caption {font.body, color.text, 12..16, lh 1.4}`;
   6. `color.secondary` não respondida → Diagnostic `UNDETERMINED` target `color.secondary`;
-  7. `created_at` default = `datetime.now(timezone.utc)`; **id da revisão** = `"brandrev_" + sha256(model_dump_json(by_alias=True) do IR com revision zerada)[0:12]` — determinístico para o mesmo conteúdo;
+  7. `created_at` default = `datetime.now(timezone.utc)`; **id da revisão** = `"brandrev_" + sha256(model_dump_json(by_alias=True) da projeção canônica do IR)[0:12]`. A projeção canônica zera `revision.id`, fixa `revision.createdAt` e todo `Evidence.confirmedAt` no epoch UTC (`1970-01-01T00:00:00Z`) e usa `Evidence.path` relativo à raiz do pacote — metadados de auditoria reais permanecem no IR publicado, mas não contaminam a identidade. Assim, mesmo pacote + mesmas respostas produzem o mesmo id mesmo em outra raiz ou horário;
   8. diagnostics do draft são preservados no IR.
 
 - [ ] **Step 1: Testes falhando** `tests/test_compile.py`:
 
 ```python
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import pytest
 from brand_runtime.intake.compile import Answers, CompileError, compile_ir
 from brand_runtime.intake.draft import build_draft
@@ -802,12 +810,13 @@ def test_happy_path_produces_valid_ir(brand_package):
     assert ir.fonts["font.heading"].source == "file"
     assert ir.roles["heading"].font == "font.heading"
     assert ir.assets["logo.primary"].sha256 and len(ir.assets["logo.primary"].sha256) == 64
+    assert "wizard-confirmation" in [e.source_type for e in ir.assets["logo.primary"].evidence]
 
 
 def test_revision_id_is_deterministic(brand_package):
     draft = build_draft(brand_package)
     a = compile_ir(draft, _answers(draft), "ACME", created_at=FIXED)
-    b = compile_ir(draft, _answers(draft), "ACME", created_at=FIXED)
+    b = compile_ir(draft, _answers(draft), "ACME", created_at=FIXED + timedelta(days=1))
     assert a.revision.id == b.revision.id
     assert a.revision.id.startswith("brandrev_")
 
@@ -943,14 +952,14 @@ def test_schemas_exported(tmp_path):
 
 **Interfaces:**
 - Produces: `generate_kit(ir: BrandIR) -> list[LayoutSpec]` — 10 layouts: arquétipos `statement`, `quote`, `announce` × perfis `post-1x1`, `post-4x5`, `story-9x16`, mais `one-pager` × `doc-a4`. IDs: `"{arquétipo}-{profile}"`.
-- Tabela normativa (adaptação por perfil, não resize — spec §5.5). Coordenadas em px `(x, y, w, h)`; `S` = safe area do perfil; `W,H` = canvas. Logo em todos: slot `logo`, kind `logo`, `fit="fixed"`, `w = max(ir.assets["logo.primary"].min_width_px, round(W * 0.12))`, `h = w`, posição canto inferior direito: `(W - S - w, H - S - h, w, h)`.
+- Tabela normativa (adaptação por perfil, não resize — spec §5.5). Coordenadas em px `(x, y, w, h)`; `S` = safe area do perfil; `W,H` = canvas. Logo em todos: slot `logo`, kind `logo`, `fit="fixed"`, `w = max(ir.assets["logo.primary"].min_width_px, round(W * 0.12))`, `h = w`, posição canto inferior direito: `(W - S - w, H - S - h, w, h)`. Slots `kind="image"` também usam `fit="fixed"` (o renderer aplica `object-fit: cover`; o valor impede que a semântica tipográfica de shrink seja herdada por imagens).
 
 | Arquétipo | Fundo | Slots (além do logo) |
 |---|---|---|
-| `statement` | `color`, token `color.primary` | `headline`: text, role `heading`, maxChars 90, area `(S, round(H*0.30), W-2S, round(H*0.40))` |
+| `statement` | `color`, token `color.background` | `headline`: text, role `heading`, maxChars 90, area `(S, round(H*0.30), W-2S, round(H*0.40))` |
 | `quote` | `image-slot` (slot `photo`: image, minResolution `(W, H)`, area `(0,0,W,H)`, required) | `quote`: text, role `heading`, maxChars 140, area `(S, round(H*0.32), W-2S, round(H*0.36))`; `author`: text, role `caption`, maxChars 40, required False, area `(S, round(H*0.72), W-2S, round(H*0.06))` |
 | `announce` | `color`, token `color.background` | `headline`: text, role `heading`, maxChars 70, area `(S, S, W-2S, round(H*0.22))`; `body`: text, role `body`, maxChars 240, area `(S, round(H*0.30), W-2S, round(H*0.28))`; `photo`: image, minResolution `(W, round(H*0.34))`, area `(0, round(H*0.62), W, round(H*0.38))` |
-| `one-pager` (só doc-a4) | `color`, token `color.background` | `title`: text, role `heading`, maxChars 80, area `(S, S, W-2S, 120)`; `body`: text, role `body`, maxChars 2200, area `(S, S+150, W-2S, H-2S-150-90)`; rodapé usa o slot `logo` padrão |
+| `one-pager` (só doc-a4) | `color`, token `color.background` | `title`: text, role `heading`, maxChars 80, area `(S, S, W-2S, 120)`; `body`: text, role `body`, maxChars 2200, area `(S, S+150, W-2S, H-2S-150-logo_w)` — termina exatamente onde começa o logo, sem sobreposição; rodapé usa o slot `logo` padrão |
 | `name_pt` | — | `statement`→"Frase de impacto", `quote`→"Citação sobre foto", `announce`→"Anúncio com foto", `one-pager`→"Documento de uma página" |
 
 - [ ] **Step 1: Testes falhando** `tests/test_generator.py`:
@@ -1016,6 +1025,7 @@ def test_logo_slot_everywhere_locked(brand_package):
 **Files:**
 - Create: `packages/engine/src/brand_runtime/guard/__init__.py`
 - Create: `packages/engine/src/brand_runtime/guard/static_checks.py`
+- Modify: `packages/engine/src/brand_runtime/ir/schema.py` (registrar verdict compartilhado)
 - Test: `packages/engine/tests/test_guard.py`
 
 **Interfaces:**
@@ -1023,22 +1033,28 @@ def test_logo_slot_everywhere_locked(brand_package):
 
 ```python
 class GuardCheck(CamelModel):
-    id: str                          # "text-length", "image-resolution", "contrast", "required-slot"
+    id: str                          # inclui "text-length", "image-resolution", "contrast", "required-slot"
     slot_id: str | None = None
-    status: Literal["pass", "blocked"]
+    status: Literal["pass", "fixed", "blocked"]  # contrato mestre; estático não emite fixed no M1
     message_pt: str
-    detail: dict = {}
+    detail: dict = Field(default_factory=dict)
+
+class GuardVerdict(CamelModel):
+    checks: list[GuardCheck]           # artefato mestre {"checks": [...]}
 
 def run_static_checks(ir: BrandIR, layout: LayoutSpec, content: ContentSpec,
                       assets_dir: Path) -> list[GuardCheck]
 ```
 
-- Regras normativas (um `GuardCheck` por slot avaliado; mensagens exatas):
-  1. `required-slot`: slot `required=True` (exceto kind `logo`) sem valor em `content.values` → blocked, `"Preencha o campo obrigatório «{slot.id}»."`;
+`export_schemas` passa a emitir também `guard-verdict.schema.json`.
+
+- Regras normativas (ordem determinística: bindings/ids desconhecidos, required/tipo, comprimento, resolução, contraste; mensagens exatas onde fixadas):
+  0. contrato: `content.layout_id != layout.id` ou `content.brand_revision_id != ir.revision.id` → `document-contract` blocked; chave de `content.values` sem slot correspondente → `unknown-slot` blocked; valor cujo kind não casa com o slot (`TextValue` para text, `ImageValue` para image) → `content-type` blocked. Esses checks impedem falso pass e nunca lançam `KeyError`/`AttributeError` para input de usuário;
+  1. `required-slot`: slot `required=True` (exceto kind `logo`) sem valor em `content.values` — ou texto vazio/apenas whitespace — → blocked, `"Preencha o campo obrigatório «{slot.id}»."`;
   2. `text-length`: `len(text) > max_chars` → blocked, `"O texto de «{slot.id}» tem {n} caracteres; o máximo deste layout é {max}."`, detail `{"chars": n, "maxChars": max}`; dentro do limite → pass;
-  3. `image-resolution`: abrir com Pillow em `assets_dir / value.path`; se `width < minResolution[0]` ou `height < minResolution[1]` → blocked, `"A imagem de «{slot.id}» tem {w}×{h}px; o mínimo para este formato é {mw}×{mh}px."`; arquivo ausente → blocked `"A imagem de «{slot.id}» não foi encontrada."`;
+  3. `image-resolution`: todo `ImageValue` é validado, mesmo quando o slot não declara `minResolution`; conteúdo de imagem do M1 aceita somente PNG/JPEG. Antes de abrir, resolver o path estritamente sob `assets_dir` e bloquear path absoluto, traversal, symlink externo, diretório, ausência, arquivo inválido/truncado e erro/decompression bomb do Pillow — nenhuma exceção crua escapa. Se `sha256` foi informado, emitir `asset-integrity` e comparar com o hash real em streaming. Quando há mínimo e `width < minResolution[0]` ou `height < minResolution[1]` → blocked, `"A imagem de «{slot.id}» tem {w}×{h}px; o mínimo para este formato é {mw}×{mh}px."`; arquivo ausente → blocked `"A imagem de «{slot.id}» não foi encontrada."`;
   4. `contrast`: para cada slot de texto sobre fundo `kind="color"`: `wcag_contrast(ir.colors[role.color].value, ir.colors[background.color_token].value) < 4.5` → blocked, `"O contraste entre o texto de «{slot.id}» e o fundo é insuficiente para leitura."`, detail `{"ratio": <2 casas>}`; senão pass. Fundo `image-slot`: não avaliar aqui (medição é do render, Plano 2);
-  5. nunca alterar conteúdo — o motor não tem status `fixed` no skeleton (autofix chega com o render).
+  5. nunca alterar conteúdo — `fixed` pertence ao contrato compartilhado, mas não é emitido pelo guard estático no M1; qualquer correção futura precisa ser explícita e medida;
 
 - [ ] **Step 1: Testes falhando** `tests/test_guard.py`:
 
@@ -1061,6 +1077,7 @@ def test_text_within_limit_passes(brand_package):
     checks = run_static_checks(ir, layout, content, brand_package)
     by_id = {(c.id, c.slot_id): c.status for c in checks}
     assert by_id[("text-length", "headline")] == "pass"
+    assert by_id[("contrast", "headline")] == "pass"
 
 
 def test_text_overflow_blocked_with_counts(brand_package):
@@ -1101,18 +1118,15 @@ def test_bad_contrast_detected_with_doctored_ir(brand_package):
     ir = _ir(brand_package)
     ir = ir.model_copy(deep=True)
     ir.colors["color.primary"].value = "#FEFEFE"     # quase branco sobre fundo branco
-    layout = _layout(ir, "statement-post-1x1")       # fundo color.primary… usar announce
-    layout = _layout(ir, "announce-post-1x1")        # fundo color.background (#FFFFFF)
+    layout = _layout(ir, "statement-post-1x1")       # fundo color.background (#FFFFFF)
     content = ContentSpec(layout_id=layout.id, brand_revision_id=ir.revision.id,
-                          values={"headline": TextValue(text="Olá"),
-                                  "body": TextValue(text="Texto"),
-                                  "photo": ImageValue(path="assets/logos/logo.svg")})
+                          values={"headline": TextValue(text="Olá")})
     checks = run_static_checks(ir, layout, content, brand_package)
     contrast = [c for c in checks if c.id == "contrast" and c.slot_id == "headline"]
     assert contrast and contrast[0].status == "blocked"
 ```
 
-  Nota: `headline` de `announce` usa role `heading` → cor `color.primary` (#FEFEFE) sobre fundo `color.background` (#FFFFFF) → contraste ~1. O slot `photo` com SVG não é avaliado por `image-resolution` (Pillow não abre SVG): quando a extensão for `.svg`, emitir `pass` com detail `{"skipped": "svg"}` — regra normativa adicional.
+  Nota: `headline` de `statement` usa role `heading` → cor `color.primary` (#FEFEFE) sobre fundo `color.background` (#FFFFFF) → contraste ~1. SVG continua permitido como asset de logo sanitizado, mas não como imagem de conteúdo no M1; slots de imagem aceitam PNG/JPEG, em paridade com o upload do Plano 3.
 
 - [ ] **Step 2:** Falhar. **Step 3:** Implementar. **Step 4:** Verde + suíte + ruff.
 - [ ] **Step 5: Commit** `feat(engine): guard estático (obrigatórios, comprimento, resolução, contraste)`
@@ -1123,16 +1137,21 @@ def test_bad_contrast_detected_with_doctored_ir(brand_package):
 
 **Files:**
 - Create: `packages/engine/src/brand_runtime/cli.py`
+- Create: `packages/engine/src/brand_runtime/_io.py` (publicação atômica de arquivo/conjunto)
+- Modify: `packages/engine/src/brand_runtime/__init__.py` (API pública do mestre)
+- Modify: `packages/engine/src/brand_runtime/ir/schema.py` (publicação transacional do conjunto)
 - Modify: `packages/engine/README.md` (seção "Uso")
 - Test: `packages/engine/tests/test_cli.py`
 
 **Interfaces:**
-- Produces: app typer `brandrt` com comandos (todos JSON UTF-8, `by_alias`, indent 2):
+- Produces: app typer `brandrt` com comandos (artefatos estruturados em JSON UTF-8, `by_alias`, indent 2, newline final; escrita atômica):
   - `brandrt extract PACKAGE_DIR --out draft.json`
   - `brandrt compile DRAFT_JSON ANSWERS_JSON --name NOME --out ir.json` (answers = `{"values": {...}}`; `CompileError` → exit code 2 com mensagem em stderr)
   - `brandrt kit IR_JSON --out-dir DIR` (um arquivo `<layout-id>.json` por layout)
-  - `brandrt guard IR_JSON LAYOUT_JSON CONTENT_JSON --assets-dir DIR` (imprime checks; exit 0 se todos `pass`, exit 3 se algum `blocked`)
-  - `brandrt schemas --out-dir DIR` (chama `export_schemas`)
+  - `brandrt guard IR_JSON LAYOUT_JSON CONTENT_JSON --assets-dir DIR` (imprime `GuardVerdict` `{"checks":[...]}` em stdout; exit 0 se nenhum check está `blocked`, exit 3 se algum está — `fixed` é não bloqueante; stderr vazio nos dois casos)
+  - `brandrt schemas --out-dir DIR` (chama `export_schemas` e gera os quatro contratos, incluindo `guard-verdict.schema.json`)
+
+Erros esperados de uso, leitura, JSON, validação Pydantic, `CompileError`, `KitGenerationError` ou I/O → mensagem PT-BR em stderr, stdout vazio e exit 2, sem traceback; bugs fora da lista operacional não são mascarados. `extract` resolve `PACKAGE_DIR` antes de persistir `packageDir`. Kit e schemas são publicados como conjuntos por staging + swap + rollback; a publicação de schemas preserva o sidecar `schemas/LICENSE`. A raiz `brand_runtime` reexporta `build_draft`, `compile_ir`, `generate_kit` e `run_static_checks`, a API pública fixada no plano-mestre.
 
 - [ ] **Step 1: Teste falhando** `tests/test_cli.py` — o roteiro completo do motor:
 
@@ -1211,6 +1230,6 @@ def test_missing_required_exits_2(brand_package, tmp_path):
 
 ## Self-Review (do autor do plano)
 
-- **Cobertura da spec (escopo motor):** intake informal §5.3 → T4–T9; atalho DTCG → T10; autoridade/evidência → T3/T9/T11; IR §5.4 → T3/T11; kit §5.5 (adaptação, não resize) → T12/T13; guard §5.8 (nunca truncar; mensagens de gente) → T14; determinismo §5.7/NFR → T11; segurança SVG §5.3 → T6; schemas publicados → T3/T12. Medição de overflow real e contraste sobre foto ficam para o Plano 2 (render) — registrado no guard como fora de escopo.
+- **Cobertura da spec (escopo motor):** intake informal §5.3 → T4–T9; atalho DTCG → T10; autoridade/evidência → T3/T9/T11; IR §5.4 → T3/T11; kit §5.5 (adaptação, não resize) → T12/T13; guard §5.8 (nunca truncar; mensagens de gente) → T14; determinismo §5.7/NFR → T11; segurança SVG §5.3 → T6; schemas publicados → T3/T12/T14. Medição de overflow real e contraste sobre foto ficam para o Plano 2 (render) — precisam ser adaptados ao `GuardVerdict` antes do fechamento do export.
 - **Type-consistency:** `Candidate`/`Evidence` definidos em T3/T4 e usados idênticos em T5–T11; `FontInfo` definido em T5, reusado em T8; `PROFILES` de T12 casa com o plano-mestre; `_ir`/`_answers`/`FIXED` reexportados entre módulos de teste com `tests/__init__.py` (T13).
 - **Placeholders:** nenhum; corpos de implementação não-mostrados estão integralmente especificados por testes + regras normativas numeradas.

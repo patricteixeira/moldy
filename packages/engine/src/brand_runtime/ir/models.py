@@ -29,7 +29,11 @@ SourceType = Literal[
 class CamelModel(BaseModel):
     """Base comum: aliases camelCase gerados automaticamente."""
 
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
 
 
 class Evidence(CamelModel):
@@ -45,6 +49,8 @@ class Evidence(CamelModel):
 
 
 class ColorToken(CamelModel):
+    """Cor semântica normalizada com sua cadeia de evidências."""
+
     value: str  # sempre "#RRGGBB" maiúsculo (normalizado no validator)
     evidence: list[Evidence]
 
@@ -55,6 +61,8 @@ class ColorToken(CamelModel):
 
 
 class FontToken(CamelModel):
+    """Fonte semântica confirmada, ligada ou não a um arquivo local."""
+
     family: str
     weight: int = Field(default=400, ge=100, le=900)
     style: Literal["normal", "italic"] = "normal"
@@ -64,14 +72,19 @@ class FontToken(CamelModel):
 
 
 class LogoAsset(CamelModel):
+    """Asset de logo publicado com integridade e proveniência confirmada."""
+
     path: str
     sha256: str
     format: Literal["svg", "png"]
+    evidence: list[Evidence]
     min_width_px: int = 96
     clear_space_ratio: float = 0.25
 
 
 class SemanticRole(CamelModel):
+    """Papel tipográfico que referencia tokens de fonte e cor do Brand IR."""
+
     font: str  # chave em BrandIR.fonts
     color: str  # chave em BrandIR.colors
     min_size_px: int
@@ -80,11 +93,15 @@ class SemanticRole(CamelModel):
 
 
 class RevisionInfo(CamelModel):
+    """Identidade determinística e instante de auditoria de uma revisão."""
+
     id: str
     created_at: datetime
 
 
 class Diagnostic(CamelModel):
+    """Lacuna ou decisão pendente comunicada em linguagem orientada à ação."""
+
     code: str
     target: str
     message: str  # PT-BR
@@ -92,10 +109,14 @@ class Diagnostic(CamelModel):
 
 
 class BrandInfo(CamelModel):
+    """Metadados essenciais da marca compilada."""
+
     name: str
 
 
 class BrandIR(CamelModel):
+    """Contrato imutável da marca consumido pelo kit, guard e renderer."""
+
     schema_version: Literal["0.1.0"] = "0.1.0"
     brand: BrandInfo
     revision: RevisionInfo

@@ -1,23 +1,57 @@
 import json
 from datetime import datetime, timezone
+
+import pytest
+from pydantic import ValidationError
+
 from brand_runtime.ir.models import (
-    BrandIR, BrandInfo, ColorToken, Evidence, FontToken, LogoAsset,
-    RevisionInfo, SemanticRole,
+    BrandIR,
+    BrandInfo,
+    ColorToken,
+    Evidence,
+    FontToken,
+    LogoAsset,
+    RevisionInfo,
+    SemanticRole,
 )
 from brand_runtime.ir.schema import export_schemas
 
 
 def _minimal_ir() -> BrandIR:
-    ev = Evidence(source_type="wizard-confirmation", confidence=1.0, authoritative=True,
-                  confirmed_at=datetime(2026, 7, 11, tzinfo=timezone.utc))
+    ev = Evidence(
+        source_type="wizard-confirmation",
+        confidence=1.0,
+        authoritative=True,
+        confirmed_at=datetime(2026, 7, 11, tzinfo=timezone.utc),
+    )
     return BrandIR(
         brand=BrandInfo(name="ACME"),
-        revision=RevisionInfo(id="brandrev_abc123", created_at=datetime(2026, 7, 11, tzinfo=timezone.utc)),
+        revision=RevisionInfo(
+            id="brandrev_abc123", created_at=datetime(2026, 7, 11, tzinfo=timezone.utc)
+        ),
         colors={"color.primary": ColorToken(value="#1a4d8f", evidence=[ev])},
-        fonts={"font.heading": FontToken(family="Archivo", weight=700, source="referenced-only", evidence=[ev])},
-        roles={"heading": SemanticRole(font="font.heading", color="color.primary",
-                                       min_size_px=40, max_size_px=96, line_height=1.1)},
-        assets={"logo.primary": LogoAsset(path="assets/logos/a.svg", sha256="0" * 64, format="svg")},
+        fonts={
+            "font.heading": FontToken(
+                family="Archivo", weight=700, source="referenced-only", evidence=[ev]
+            )
+        },
+        roles={
+            "heading": SemanticRole(
+                font="font.heading",
+                color="color.primary",
+                min_size_px=40,
+                max_size_px=96,
+                line_height=1.1,
+            )
+        },
+        assets={
+            "logo.primary": LogoAsset(
+                path="assets/logos/a.svg",
+                sha256="0" * 64,
+                format="svg",
+                evidence=[ev],
+            )
+        },
     )
 
 
@@ -35,9 +69,22 @@ def test_json_is_camel_case_and_round_trips():
 
 
 def test_confidence_bounds_enforced():
-    import pytest
     with pytest.raises(Exception):
         Evidence(source_type="manual-entry", confidence=1.5)
+
+
+def test_public_contract_rejects_unknown_fields_at_every_level():
+    payload = _minimal_ir().model_dump(mode="json", by_alias=True)
+    payload["unexpected"] = True
+
+    with pytest.raises(ValidationError, match="unexpected"):
+        BrandIR.model_validate(payload)
+
+    payload.pop("unexpected")
+    payload["brand"]["unexpected"] = True
+
+    with pytest.raises(ValidationError, match="unexpected"):
+        BrandIR.model_validate(payload)
 
 
 def test_export_schemas(tmp_path):

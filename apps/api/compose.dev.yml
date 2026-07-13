@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: brandrt
+      POSTGRES_PASSWORD: brandrt
+      POSTGRES_DB: brandrt
+    ports:
+      - "127.0.0.1:5433:5432"
