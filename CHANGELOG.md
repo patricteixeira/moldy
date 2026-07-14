@@ -53,6 +53,9 @@ release pública.
   derivado do Brand IR, logo SVG convertido apenas no workdir, MIME OOXML e
   filename estável no resultado; PPTX também preserva fundo, texto e imagens
   substituíveis como objetos nativos.
+- Editor web com saída final PNG/PDF e saída editável PPTX/DOCX no mesmo fluxo
+  protegido pelo Guard; a interface orienta explicitamente a continuação no
+  Google Slides ou Google Docs e congela os slots durante qualquer exportação.
 - Padrões de engenharia (`ENGINEERING.md`), ADRs iniciais, CI e licenças
   (AGPL-3.0 para o app, MIT para os schemas).
 
@@ -79,3 +82,5 @@ release pública.
 - Regressão do corte M2.1 passou com 216 testes do motor, 152 da API/worker e
   92 do app web; a imagem de produção do worker contém e valida os quatro
   templates nativos versionados.
+- Regressão do corte M2.2 passou com 93 testes do app web, build de produção e
+  E2E Chromium baixando e reabrindo PNG/PDF/PPTX/DOCX contra a stack real.

@@ -19,7 +19,7 @@ function enginePython(): string {
   return executable
 }
 
-function validateOutput(kind: "png" | "pdf", file: string): void {
+function validateOutput(kind: "png" | "pdf" | "pptx" | "docx", file: string): void {
   execFileSync(
     enginePython(),
     [path.join(here, "fixtures", "validate_output.py"), kind, file],
@@ -27,7 +27,7 @@ function validateOutput(kind: "png" | "pdf", file: string): void {
   )
 }
 
-test("walking skeleton M1: instalar → confirmar → kit → slots → guard → exportar", async ({
+test("walking skeleton M1/M2: instalar → confirmar → kit → slots → guard → exportar", async ({
   page,
 }) => {
   await page.goto("/")
@@ -94,6 +94,18 @@ test("walking skeleton M1: instalar → confirmar → kit → slots → guard �
   await (await pngDownload).saveAs(pngPath)
   validateOutput("png", pngPath)
 
+  await page.getByTestId("exportar-pptx").click()
+  await expect(page.getByTestId("export-status")).toContainText("PPTX pronto", {
+    timeout: 120_000,
+  })
+  const pptxLink = page.getByTestId("download-link")
+  await expect(pptxLink).toHaveAttribute("download", /\.pptx$/)
+  const pptxDownload = page.waitForEvent("download")
+  await pptxLink.click()
+  const pptxPath = path.join(FIX, "out-post.pptx")
+  await (await pptxDownload).saveAs(pptxPath)
+  validateOutput("pptx", pptxPath)
+
   await page.goto(kitUrl)
   await page.locator('[data-testid="kit-card"][data-layout-id="one-pager-doc-a4"]').click()
   await page.getByTestId("slot-input-title").fill("Relatório do mês")
@@ -108,4 +120,16 @@ test("walking skeleton M1: instalar → confirmar → kit → slots → guard �
   const pdfPath = path.join(FIX, "out-doc.pdf")
   await (await pdfDownload).saveAs(pdfPath)
   validateOutput("pdf", pdfPath)
+
+  await page.getByTestId("exportar-docx").click()
+  await expect(page.getByTestId("export-status")).toContainText("DOCX pronto", {
+    timeout: 120_000,
+  })
+  const docxLink = page.getByTestId("download-link")
+  await expect(docxLink).toHaveAttribute("download", /\.docx$/)
+  const docxDownload = page.waitForEvent("download")
+  await docxLink.click()
+  const docxPath = path.join(FIX, "out-doc.docx")
+  await (await docxDownload).saveAs(docxPath)
+  validateOutput("docx", docxPath)
 })

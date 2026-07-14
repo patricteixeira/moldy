@@ -19,7 +19,9 @@ proxy nginx da stack Docker.
 ## E2E
 
 O roteiro E2E atravessa o sistema real: intake, confirmação da marca, kit,
-guard e exportação PNG/PDF. Ele gera todas as fixtures em tempo de execução.
+guard e exportação PNG/PDF/PPTX/DOCX. Ele gera todas as fixtures em tempo de
+execução e reabre os arquivos editáveis para verificar texto, imagem e estilos
+nativos.
 
 ```powershell
 # na raiz do repositório

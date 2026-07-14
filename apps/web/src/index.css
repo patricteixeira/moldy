@@ -866,8 +866,50 @@
   }
 
   .guard-panel,
-  .export-error {
+  .export-error,
+  .export-actions {
     grid-column: 1 / -1;
+  }
+
+  .export-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .export-option {
+    display: grid;
+    min-height: 7.25rem;
+    align-content: center;
+    gap: 0.2rem;
+    padding: var(--space-4);
+    text-align: left;
+  }
+
+  .export-option-editable {
+    border-color: var(--ui-ink);
+    background: transparent;
+    color: var(--ui-ink);
+  }
+
+  .export-option-kicker {
+    font-size: 0.6875rem;
+    font-weight: 750;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .export-option-title {
+    font-size: 1.0625rem;
+    font-weight: 750;
+  }
+
+  .export-option-description {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1.35;
+    opacity: 0.78;
   }
 
   .guard-panel {
@@ -1061,6 +1103,10 @@
 
   .action-row > button {
     flex: 1 1 100%;
+  }
+
+  .export-actions {
+    grid-template-columns: 1fr;
   }
 
   .manual-font-row {

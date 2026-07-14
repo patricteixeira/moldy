@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useApi } from "../api/context"
-import type { GuardCheck, LayoutSpec, SlotValue } from "../api/types"
+import type { ExportFormat, GuardCheck, LayoutSpec, SlotValue } from "../api/types"
 import { GuardPanel } from "./GuardPanel"
 import { useExportFlow } from "./useExportFlow"
 
@@ -34,44 +34,77 @@ export function ExportControls({
   onPendingChange,
 }: ExportControlsProps) {
   const client = useApi()
-  const format = layout.profile === "doc-a4" ? "pdf" : "png"
+  const primaryFormat: ExportFormat = layout.profile === "doc-a4" ? "pdf" : "png"
+  const editableFormat: ExportFormat = layout.profile === "doc-a4" ? "docx" : "pptx"
+  const isDocument = layout.profile === "doc-a4"
   const content = useMemo(
     () => ({ brandRevisionId: revisionId, layoutId: layout.id, values }),
     [layout.id, revisionId, values],
   )
-  const flow = useExportFlow(client, content, format, pollIntervalMs)
-  const testId = format === "pdf" ? "exportar-pdf" : "exportar-png"
+  const primaryFlow = useExportFlow(client, content, primaryFormat, pollIntervalMs)
+  const editableFlow = useExportFlow(client, content, editableFormat, pollIntervalMs)
+  const [activeFormat, setActiveFormat] = useState<ExportFormat>(primaryFormat)
+  const activeFlow = activeFormat === editableFormat ? editableFlow : primaryFlow
+  const pending = primaryFlow.pending || editableFlow.pending
 
   useEffect(() => {
-    onPendingChange?.(flow.pending)
+    onPendingChange?.(pending)
     return () => onPendingChange?.(false)
-  }, [flow.pending, onPendingChange])
+  }, [onPendingChange, pending])
 
   return (
     <div className="editor-export-controls" data-testid="editor-export-controls">
-      <GuardPanel checks={flow.checks} onAction={focusCheckField} />
-      {flow.error ? <p className="export-error" role="alert">{flow.error}</p> : null}
-      <button
-        type="button"
-        data-testid={testId}
-        disabled={disabled || flow.pending}
-        onClick={() => void flow.run()}
-      >
-        Exportar {format.toUpperCase()}
-      </button>
-      {flow.status ? (
+      <GuardPanel checks={activeFlow.checks} onAction={focusCheckField} />
+      {activeFlow.error ? <p className="export-error" role="alert">{activeFlow.error}</p> : null}
+      <div className="export-actions" role="group" aria-label="Formatos de exportação">
+        <button
+          className="export-option export-option-primary"
+          type="button"
+          data-testid={`exportar-${primaryFormat}`}
+          disabled={disabled || pending}
+          onClick={() => {
+            setActiveFormat(primaryFormat)
+            void primaryFlow.run()
+          }}
+        >
+          <span className="export-option-kicker">Arquivo final</span>
+          <span className="export-option-title">Exportar {primaryFormat.toUpperCase()}</span>
+          <span className="export-option-description">
+            {isDocument ? "Pronto para compartilhar" : "Pronto para publicar"}
+          </span>
+        </button>
+        <button
+          className="export-option export-option-editable"
+          type="button"
+          data-testid={`exportar-${editableFormat}`}
+          disabled={disabled || pending}
+          onClick={() => {
+            setActiveFormat(editableFormat)
+            void editableFlow.run()
+          }}
+        >
+          <span className="export-option-kicker">Arquivo editável</span>
+          <span className="export-option-title">Exportar {editableFormat.toUpperCase()}</span>
+          <span className="export-option-description">
+            {isDocument
+              ? "Edite no Word ou Google Docs"
+              : "Edite no PowerPoint ou Google Slides"}
+          </span>
+        </button>
+      </div>
+      {activeFlow.status ? (
         <p className="export-status" data-testid="export-status" role="status" aria-live="polite">
-          {flow.status}
+          {activeFlow.status}
         </p>
       ) : null}
-      {flow.download ? (
+      {activeFlow.download ? (
         <a
           className="download-link"
           data-testid="download-link"
-          href={flow.download.url}
-          download={flow.download.filename}
+          href={activeFlow.download.url}
+          download={activeFlow.download.filename}
         >
-          Baixar arquivo
+          Baixar {activeFlow.download.format.toUpperCase()}
         </a>
       ) : null}
     </div>

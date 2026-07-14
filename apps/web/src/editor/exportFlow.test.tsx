@@ -84,13 +84,44 @@ it("export feliz: documento → job → link de download", async () => {
   const link = await screen.findByTestId("download-link", {}, { timeout: 3000 })
   expect(link).toHaveAttribute("href", `/v1/assets/${sha}`)
   expect(link).toHaveAttribute("download", "doc1.png")
-  expect(screen.getByTestId("export-status")).toHaveTextContent("Arquivo pronto.")
+  expect(screen.getByTestId("export-status")).toHaveTextContent("PNG pronto para baixar.")
   expect(createDocument).toHaveBeenCalledWith({
     layoutId: "statement-post-1x1",
     brandRevisionId: "brandrev_test",
     values: { headline: { kind: "text", text: "Lançamento em agosto" } },
   })
   expect(requestExport).toHaveBeenCalledWith("doc1", "png")
+})
+
+it("layout social oferece PPTX editável no Google Slides", async () => {
+  const sha = "e".repeat(64)
+  const requestExport = vi.fn(async () => ({ jobId: "job-pptx" }))
+  const getJob = vi.fn(async () => ({
+    id: "job-pptx",
+    status: "succeeded" as const,
+    result: {
+      sha256: sha,
+      url: `/v1/assets/${sha}`,
+      format: "pptx" as const,
+      filename: "statement-post-1x1.pptx",
+    },
+    checks: [],
+    error: null,
+  }))
+  renderEditor(fakeClient({ getKit: kit, requestExport, getJob }))
+
+  const editableButton = await screen.findByTestId("exportar-pptx")
+  expect(screen.getByTestId("exportar-png")).toHaveTextContent("Pronto para publicar")
+  expect(editableButton).toHaveTextContent("Arquivo editável")
+  expect(editableButton).toHaveTextContent("Edite no PowerPoint ou Google Slides")
+
+  await userEvent.click(editableButton)
+
+  const link = await screen.findByTestId("download-link")
+  expect(requestExport).toHaveBeenCalledWith("doc_x", "pptx")
+  expect(link).toHaveAttribute("download", "statement-post-1x1.pptx")
+  expect(link).toHaveTextContent("Baixar PPTX")
+  expect(screen.getByTestId("export-status")).toHaveTextContent("PPTX pronto para baixar.")
 })
 
 it("job falho mostra erro e checks medidos em PT-BR", async () => {
@@ -140,11 +171,35 @@ it("backstop 409 preserva os checks e a mensagem da API", async () => {
   expect(screen.getByTestId("guard-item")).toHaveAttribute("data-check-id", "required-slot")
 })
 
-it("layout doc-a4 exporta PDF", async () => {
-  renderEditor(fakeClient({ getKit: kit }), "one-pager-doc-a4")
+it("layout doc-a4 oferece PDF final e DOCX editável no Google Docs", async () => {
+  const sha = "d".repeat(64)
+  const requestExport = vi.fn(async () => ({ jobId: "job-docx" }))
+  const getJob = vi.fn(async () => ({
+    id: "job-docx",
+    status: "succeeded" as const,
+    result: {
+      sha256: sha,
+      url: `/v1/assets/${sha}`,
+      format: "docx" as const,
+      filename: "one-pager-doc-a4.docx",
+    },
+    checks: [],
+    error: null,
+  }))
+  renderEditor(fakeClient({ getKit: kit, requestExport, getJob }), "one-pager-doc-a4")
   await screen.findByTestId("slot-input-title")
   expect(screen.getByTestId("exportar-pdf")).toHaveTextContent("Exportar PDF")
+  expect(screen.getByTestId("exportar-pdf")).toHaveTextContent("Pronto para compartilhar")
   expect(screen.queryByTestId("exportar-png")).not.toBeInTheDocument()
+
+  const editableButton = screen.getByTestId("exportar-docx")
+  expect(editableButton).toHaveTextContent("Edite no Word ou Google Docs")
+  await userEvent.click(editableButton)
+
+  const link = await screen.findByTestId("download-link")
+  expect(requestExport).toHaveBeenCalledWith("doc_x", "docx")
+  expect(link).toHaveAttribute("download", "one-pager-doc-a4.docx")
+  expect(link).toHaveTextContent("Baixar DOCX")
 })
 
 it("bloqueia a exportação enquanto a foto ainda está sendo enviada", async () => {
@@ -168,7 +223,9 @@ it("bloqueia a exportação enquanto a foto ainda está sendo enviada", async ()
   await userEvent.upload(input, new File(["png"], "foto.png", { type: "image/png" }))
 
   const exportButton = screen.getByTestId("exportar-png")
+  const editableButton = screen.getByTestId("exportar-pptx")
   expect(exportButton).toBeDisabled()
+  expect(editableButton).toBeDisabled()
   await userEvent.click(exportButton)
   expect(createDocument).not.toHaveBeenCalled()
 
@@ -176,6 +233,7 @@ it("bloqueia a exportação enquanto a foto ainda está sendo enviada", async ()
   finishUpload({ sha256, size: 3 })
   expect(await screen.findByText("Foto pronta.")).toBeInTheDocument()
   expect(exportButton).toBeEnabled()
+  expect(editableButton).toBeEnabled()
 })
 
 it("congela os slots enquanto o arquivo está sendo gerado", async () => {
@@ -185,7 +243,7 @@ it("congela os slots enquanto o arquivo está sendo gerado", async () => {
     result: {
       sha256: string
       url: string
-      format: "png"
+      format: "pptx"
       filename: string
     }
     checks: []
@@ -199,7 +257,7 @@ it("congela os slots enquanto o arquivo está sendo gerado", async () => {
         result: {
           sha256: string
           url: string
-          format: "png"
+          format: "pptx"
           filename: string
         }
         checks: []
@@ -211,10 +269,12 @@ it("congela os slots enquanto o arquivo está sendo gerado", async () => {
   renderEditor(fakeClient({ getKit: kit, getJob }))
   const input = await screen.findByTestId("slot-input-headline")
   await userEvent.type(input, "Conteúdo congelado")
-  await userEvent.click(screen.getByTestId("exportar-png"))
+  await userEvent.click(screen.getByTestId("exportar-pptx"))
 
-  expect(await screen.findByText("Gerando arquivo…")).toBeInTheDocument()
+  expect(await screen.findByText("Gerando PPTX…")).toBeInTheDocument()
   expect(input).toBeDisabled()
+  expect(screen.getByTestId("exportar-png")).toBeDisabled()
+  expect(screen.getByTestId("exportar-pptx")).toBeDisabled()
 
   const sha256 = "a".repeat(64)
   finishJob({
@@ -223,14 +283,16 @@ it("congela os slots enquanto o arquivo está sendo gerado", async () => {
     result: {
       sha256,
       url: `/v1/assets/${sha256}`,
-      format: "png",
-      filename: "doc_x.png",
+      format: "pptx",
+      filename: "doc_x.pptx",
     },
     checks: [],
     error: null,
   })
-  expect(await screen.findByText("Arquivo pronto.")).toBeInTheDocument()
+  expect(await screen.findByText("PPTX pronto para baixar.")).toBeInTheDocument()
   expect(input).toBeEnabled()
+  expect(screen.getByTestId("exportar-png")).toBeEnabled()
+  expect(screen.getByTestId("exportar-pptx")).toBeEnabled()
 })
 
 it("encerra um export preso depois de cinco minutos", async () => {

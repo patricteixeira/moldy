@@ -113,7 +113,7 @@ export function useExportFlow(
       )
       if (!isActive()) return
 
-      setStatus("Gerando arquivo…")
+      setStatus(`Gerando ${format.toUpperCase()}…`)
       while (isActive()) {
         const job = await beforeTimeout(client.getJob(jobId))
         if (!isActive()) return
@@ -131,7 +131,7 @@ export function useExportFlow(
             return
           }
           setDownload(job.result)
-          setStatus("Arquivo pronto.")
+          setStatus(`${format.toUpperCase()} pronto para baixar.`)
           return
         }
 
