@@ -65,6 +65,14 @@ export. Fontes comerciais ou com
 redistribuição restrita continuam exigindo uma licença compatível; o sistema
 não as substitui silenciosamente.
 
+Quando o manual declara uma gramática visual completa, o Brand IR 0.3 também
+preserva relações de composição — modos claro/escuro, limite do acento,
+grafismos, numeração e versões do símbolo. O kit então acrescenta duas provas
+editoriais 4:5 coerentes com essas regras. A pessoa edita somente o conteúdo;
+moldura, padrão, hierarquia, contraste e logo adequada ao fundo permanecem
+travados por construção. A decisão está registrada na
+[`ADR 0010`](docs/adr/0010-gramatica-de-composicao-editorial.md).
+
 ## Estrutura do repositório
 
 ```

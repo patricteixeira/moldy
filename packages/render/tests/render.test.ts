@@ -2,6 +2,83 @@ import { beforeEach, expect, it } from "vitest";
 import { renderDocument } from "../src/render";
 import { fixturePayload } from "./fixtures";
 
+function editorialPayload() {
+  const payload = fixturePayload();
+  payload.brandIr.schemaVersion = "0.3.0";
+  Object.assign(payload.brandIr.colors, {
+    "color.paper": { value: "#FCFBF8" },
+    "color.graphite": { value: "#1F232A" },
+    "color.accent": { value: "#CA6B0B" },
+  });
+  Object.assign(payload.brandIr.assets, {
+    "logo.inverse": { path: "assets/logos/logo-inverse.svg" },
+    "motif.signature": { path: "assets/motifs/signature.svg" },
+  });
+  payload.brandIr.compositionRules = {
+    modes: {
+      dark: {
+        backgroundColorToken: "color.graphite",
+        foregroundColorToken: "color.paper",
+        logoAssetToken: "logo.inverse",
+      },
+    },
+    colorRatios: [],
+    accent: { colorToken: "color.accent", maxRatio: 0.15 },
+    motifs: [{ kind: "diagonal-lines" }],
+    numbering: { style: "zero-padded", minDigits: 2 },
+  };
+  payload.layoutSpec.background = { kind: "color", colorToken: "color.graphite" };
+  payload.layoutSpec.compositionMode = "dark";
+  payload.layoutSpec.lockedLayers = [
+    {
+      id: "frame",
+      kind: "shape",
+      shape: "circle",
+      area: [20, 20, 80, 80],
+      colorToken: "color.accent",
+      opacity: 0.5,
+      zIndex: 1,
+    },
+    {
+      id: "diagonal-field",
+      kind: "motif",
+      motif: "diagonal-lines",
+      area: [720, 0, 360, 520],
+      colorToken: "color.paper",
+      opacity: 0.1,
+      strokeWidthPx: 2,
+      spacingPx: 24,
+      zIndex: 0,
+    },
+    {
+      id: "signature-mark",
+      kind: "asset",
+      assetToken: "motif.signature",
+      area: [800, 800, 200, 200],
+      fit: "contain",
+      opacity: 0.75,
+      zIndex: 2,
+    },
+  ];
+  Object.assign(payload.layoutSpec.slots[0], {
+    zIndex: 10,
+    opacity: 0.9,
+    textAlign: "center" as const,
+    textTransform: "uppercase" as const,
+    letterSpacingEm: -0.04,
+    fillMode: "stroke" as const,
+    strokeColorToken: "color.paper",
+    strokeWidthPx: 2.5,
+    emphasisColorToken: "color.accent",
+  });
+  payload.contentSpec.values.headline = {
+    kind: "text",
+    text: "INTENÇÃO pede INTENÇÃO",
+    emphasis: "INTENÇÃO",
+  };
+  return payload;
+}
+
 let container: HTMLElement;
 
 beforeEach(() => {
@@ -156,4 +233,121 @@ it("fallback é por slot usado e load-failed só surge após status confirmado",
       reason: "load-failed",
     },
   ]);
+});
+
+it("compositionMode aplica fundo, foreground e alias de logo do modo", () => {
+  const payload = editorialPayload();
+  renderDocument(container, payload);
+
+  const background = container.style.backgroundColor.toLowerCase().replaceAll(" ", "");
+  expect(["#1f232a", "rgb(31,35,42)"]).toContain(background);
+  const content = container.querySelector<HTMLElement>("[data-slot-content]")!;
+  expect(content.style.getPropertyValue("-webkit-text-stroke")).toContain("#FCFBF8");
+  expect(
+    container.querySelector<HTMLImageElement>('[data-slot-id="logo"] img')!.getAttribute("src"),
+  ).toBe("/pkg/assets/logos/logo-inverse.svg");
+});
+
+it("renderiza layers fechadas na ordem antes dos slots e sem recurso externo", () => {
+  renderDocument(container, editorialPayload());
+  const layers = [...container.querySelectorAll<HTMLElement>("[data-locked-layer-index]")];
+  expect(layers.map((layer) => layer.dataset.layerId)).toEqual([
+    "frame",
+    "diagonal-field",
+    "signature-mark",
+  ]);
+  expect(layers[0].style.borderRadius).toBe("50%");
+  expect(layers[0].style.zIndex).toBe("1");
+  expect(layers[0].style.opacity).toBe("0.5");
+  expect(layers[1].style.backgroundImage).toContain("repeating-linear-gradient");
+  expect(layers[1].style.backgroundImage).not.toContain("url(");
+  const asset = layers[2].querySelector<HTMLImageElement>("img")!;
+  expect(asset.getAttribute("src")).toBe("/pkg/assets/motifs/signature.svg");
+  expect(asset.style.objectFit).toBe("contain");
+  expect(layers[2].style.opacity).toBe("0.75");
+
+  const headline = container.querySelector<HTMLElement>('[data-slot-id="headline"]')!;
+  expect(
+    layers[2].compareDocumentPosition(headline) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
+it("materializa defaults omitidos das layers somente no render", () => {
+  const payload = editorialPayload();
+  for (const layer of payload.layoutSpec.lockedLayers!) {
+    delete layer.opacity;
+    delete layer.zIndex;
+    if (layer.kind === "asset") delete layer.fit;
+  }
+  renderDocument(container, payload);
+
+  const layers = [...container.querySelectorAll<HTMLElement>("[data-locked-layer-index]")];
+  expect(layers.every((layer) => layer.style.opacity === "1")).toBe(true);
+  expect(layers.every((layer) => layer.style.zIndex === "0")).toBe(true);
+  expect(layers[2].querySelector<HTMLImageElement>("img")!.style.objectFit).toBe("contain");
+  const asset = payload.layoutSpec.lockedLayers![2];
+  if (asset.kind !== "asset") throw new Error("fixture inválida");
+  expect(asset.fit).toBeUndefined();
+});
+
+it("aplica propriedades editoriais de slot e stroke determinístico", () => {
+  renderDocument(container, editorialPayload());
+  const slot = container.querySelector<HTMLElement>('[data-slot-id="headline"]')!;
+  const content = slot.querySelector<HTMLElement>("[data-slot-content]")!;
+  expect(slot.style.zIndex).toBe("10");
+  expect(slot.style.opacity).toBe("0.9");
+  expect(content.style.textAlign).toBe("center");
+  expect(content.style.textTransform).toBe("uppercase");
+  expect(content.style.letterSpacing).toBe("-0.04em");
+  expect(content.style.color).toBe("transparent");
+  expect(content.style.getPropertyValue("-webkit-text-stroke")).toBe("2.5px #FCFBF8");
+});
+
+it("divide somente a primeira ocorrência exata da ênfase sem innerHTML", () => {
+  renderDocument(container, editorialPayload());
+  const content = container.querySelector<HTMLElement>("[data-slot-content]")!;
+  const emphasis = content.querySelectorAll<HTMLElement>("[data-emphasis]");
+  expect(emphasis).toHaveLength(1);
+  expect(emphasis[0].textContent).toBe("INTENÇÃO");
+  expect(emphasis[0].style.all).toBe("unset");
+  expect(emphasis[0].style.color.toLowerCase().replaceAll(" ", "")).toMatch(
+    /#ca6b0b|rgb\(202,107,11\)/,
+  );
+  expect(content.childNodes).toHaveLength(3);
+  expect(content.childNodes[2].textContent).toBe(" pede INTENÇÃO");
+  expect(content.textContent).toBe("INTENÇÃO pede INTENÇÃO");
+});
+
+it("ênfase temporariamente fora do texto não cria span nem perde conteúdo", () => {
+  const payload = editorialPayload();
+  payload.contentSpec.values.headline = {
+    kind: "text",
+    text: "Frase ainda sendo editada",
+    emphasis: "trecho anterior",
+  };
+  renderDocument(container, payload);
+  const content = container.querySelector<HTMLElement>("[data-slot-content]")!;
+  expect(content.querySelector("[data-emphasis]")).toBeNull();
+  expect(content.textContent).toBe("Frase ainda sendo editada");
+});
+
+it("textFormat zero-padded usa minDigits das regras de numeração", () => {
+  const payload = editorialPayload();
+  payload.brandIr.compositionRules!.numbering = { style: "zero-padded", minDigits: 3 };
+  payload.layoutSpec.slots[0].textFormat = "zero-padded";
+  payload.layoutSpec.slots[0].emphasisColorToken = null;
+  payload.contentSpec.values.headline = { kind: "text", text: "7" };
+  renderDocument(container, payload);
+  expect(container.querySelector("[data-slot-content]")!.textContent).toBe("007");
+});
+
+it("textFormat zero-padded usa dois dígitos quando minDigits é omitido", () => {
+  const payload = editorialPayload();
+  payload.brandIr.compositionRules!.numbering = { style: "zero-padded" };
+  payload.layoutSpec.slots[0].textFormat = "zero-padded";
+  payload.layoutSpec.slots[0].emphasisColorToken = null;
+  payload.contentSpec.values.headline = { kind: "text", text: "7" };
+  renderDocument(container, payload);
+  expect(container.querySelector("[data-slot-content]")!.textContent).toBe("07");
+  expect(payload.brandIr.compositionRules!.numbering.minDigits).toBeUndefined();
 });

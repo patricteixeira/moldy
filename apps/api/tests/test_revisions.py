@@ -2,7 +2,7 @@ def test_get_ir_verbatim(client, compiled):
     response = client.get(f"/v1/brand-revisions/{compiled['brandRevisionId']}")
     assert response.status_code == 200
     ir = response.json()
-    assert ir["schemaVersion"] == "0.2.0"
+    assert ir["schemaVersion"] == "0.3.0"
     assert ir["brand"]["name"] == "ACME"
     assert ir["revision"]["id"] == compiled["brandRevisionId"]
     assert "color.primary" in ir["colors"]

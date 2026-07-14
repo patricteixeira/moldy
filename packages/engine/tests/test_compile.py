@@ -2,6 +2,7 @@ import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pymupdf
 import pytest
 
 from brand_runtime.intake.compile import Answers, CompileError, compile_ir
@@ -49,6 +50,66 @@ def _answers(draft):
     )
 
 
+def _composition_draft(brand_package):
+    """Monta um pacote autoral equivalente sem depender dos arquivos em exemplo/."""
+    manual = brand_package / "manual.pdf"
+    manual.unlink()
+    with pymupdf.open() as document:
+        page = document.new_page(width=595, height=842)
+        page.insert_textbox(
+            pymupdf.Rect(40, 40, 555, 800),
+            """FUNDO CLARO - POSITIVO
+FUNDO ESCURO - NEGATIVO
+Grafite - tinta
+60%
+HEX #1F232A
+Ambar - o ponto
+10%
+HEX #CA6B0B
+Papel - fundo
+30%
+HEX #FCFBF8
+O ambar deve ficar abaixo de 10% da composicao.
+PADRAO DIAGONAL - FUNDOS E CAPAS
+Numeracao sempre com zero a esquerda.
+MINIMO DIGITAL
+24 px (simbolo)
+AREA DE PROTECAO = 1/4 DA ALTURA
+""",
+            fontname="helv",
+            fontsize=11,
+        )
+        document.save(manual)
+
+    logos = brand_package / "assets" / "logos"
+    (logos / "logo.svg").unlink()
+    (logos / "brand-positive.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<rect width="100" height="100" fill="#1F232A"/></svg>',
+        encoding="utf-8",
+    )
+    (logos / "brand-negative.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<rect width="100" height="100" fill="#FCFBF8"/></svg>',
+        encoding="utf-8",
+    )
+    return build_draft(brand_package)
+
+
+def _composition_ir(brand_package):
+    draft = _composition_draft(brand_package)
+    answers = _answers(draft)
+    answers.values.update(
+        {
+            "color.primary": "#1F232A",
+            "color.background": "#FCFBF8",
+            "color.text": "#1F232A",
+            "color.secondary": "#CA6B0B",
+        }
+    )
+    return compile_ir(draft, answers, "Digital Artisan", created_at=FIXED)
+
+
 def test_missing_required_raises(brand_package):
     draft = build_draft(brand_package)
     with pytest.raises(CompileError) as exc:
@@ -68,6 +129,56 @@ def test_happy_path_produces_valid_ir(brand_package):
     assert ir.assets["logo.primary"].sha256 and len(ir.assets["logo.primary"].sha256) == 64
     logo_evidence = [e.source_type for e in ir.assets["logo.primary"].evidence]
     assert "svg-asset" in logo_evidence and "wizard-confirmation" in logo_evidence
+
+
+def test_composition_rules_and_logo_variants_compile_with_precise_provenance(brand_package):
+    ir = _composition_ir(brand_package)
+
+    assert ir.schema_version == "0.3.0"
+    assert set(ir.assets) == {"logo.primary", "logo.onLight", "logo.onDark"}
+    assert ir.assets["logo.onLight"].path.endswith("brand-positive.svg")
+    assert ir.assets["logo.onDark"].path.endswith("brand-negative.svg")
+    assert all(asset.min_width_px == 24 for asset in ir.assets.values())
+    assert all(asset.clear_space_ratio == 0.25 for asset in ir.assets.values())
+    assert any(
+        item.source_type == "wizard-confirmation" for item in ir.assets["logo.primary"].evidence
+    )
+    assert all(
+        item.source_type != "wizard-confirmation"
+        for token in ("logo.onLight", "logo.onDark")
+        for item in ir.assets[token].evidence
+    )
+
+    rules = ir.composition_rules
+    assert rules is not None
+    assert rules.modes.light is not None and rules.modes.dark is not None
+    assert rules.modes.light.model_dump(mode="json", by_alias=True) | {"evidence": []} == {
+        "backgroundColorToken": "color.background",
+        "foregroundColorToken": "color.text",
+        "logoAssetToken": "logo.onLight",
+        "evidence": [],
+    }
+    assert rules.modes.dark.background_color_token == "color.primary"
+    assert rules.modes.dark.foreground_color_token == "color.background"
+    assert rules.modes.dark.logo_asset_token == "logo.onDark"
+    assert [(item.color_token, item.ratio) for item in rules.color_ratios] == [
+        ("color.primary", 0.6),
+        ("color.background", 0.3),
+        ("color.secondary", 0.1),
+    ]
+    assert rules.accent is not None
+    assert (rules.accent.color_token, rules.accent.max_ratio) == ("color.secondary", 0.1)
+    assert [item.kind for item in rules.motifs] == ["diagonal-lines"]
+    assert rules.numbering is not None
+    assert (rules.numbering.style, rules.numbering.min_digits) == ("zero-padded", 2)
+    assert set(ir.roles) >= {"display", "label", "index", "signature"}
+    assert (ir.roles["display"].min_size_px, ir.roles["display"].max_size_px) == (56, 84)
+    assert (ir.roles["index"].min_size_px, ir.roles["index"].max_size_px) == (240, 460)
+    assert all(
+        evidence.path == "manual.pdf"
+        for evidence in rules.modes.light.evidence
+        if evidence.path is not None
+    )
 
 
 def test_revision_id_is_deterministic(brand_package):

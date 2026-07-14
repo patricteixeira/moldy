@@ -1,5 +1,83 @@
 {
   "$defs": {
+    "AssetLayer": {
+      "additionalProperties": false,
+      "description": "Asset imutável do Brand IR posicionado pelo layout.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "asset",
+          "default": "asset",
+          "title": "Kind",
+          "type": "string"
+        },
+        "assetToken": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Assettoken",
+          "type": "string"
+        },
+        "area": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "title": "Area",
+          "type": "array"
+        },
+        "fit": {
+          "default": "contain",
+          "enum": [
+            "contain",
+            "cover"
+          ],
+          "title": "Fit",
+          "type": "string"
+        },
+        "opacity": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Opacity",
+          "type": "number"
+        },
+        "zIndex": {
+          "default": 0,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Zindex",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "assetToken",
+        "area"
+      ],
+      "title": "AssetLayer",
+      "type": "object"
+    },
     "Background": {
       "additionalProperties": false,
       "allOf": [
@@ -86,6 +164,173 @@
       "title": "Canvas",
       "type": "object"
     },
+    "MotifLayer": {
+      "additionalProperties": false,
+      "description": "Aplicação fixa de um motivo pertencente ao vocabulário do Brand IR.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "motif",
+          "default": "motif",
+          "title": "Kind",
+          "type": "string"
+        },
+        "motif": {
+          "const": "diagonal-lines",
+          "title": "Motif",
+          "type": "string"
+        },
+        "area": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "title": "Area",
+          "type": "array"
+        },
+        "colorToken": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Colortoken",
+          "type": "string"
+        },
+        "opacity": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Opacity",
+          "type": "number"
+        },
+        "strokeWidthPx": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 20.0,
+          "title": "Strokewidthpx",
+          "type": "number"
+        },
+        "spacingPx": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 256.0,
+          "title": "Spacingpx",
+          "type": "number"
+        },
+        "zIndex": {
+          "default": 0,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Zindex",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "motif",
+        "area",
+        "colorToken",
+        "strokeWidthPx",
+        "spacingPx"
+      ],
+      "title": "MotifLayer",
+      "type": "object"
+    },
+    "ShapeLayer": {
+      "additionalProperties": false,
+      "description": "Forma geométrica fixa e fechada, sem estilos livres.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "shape",
+          "default": "shape",
+          "title": "Kind",
+          "type": "string"
+        },
+        "shape": {
+          "enum": [
+            "rectangle",
+            "circle"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "area": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            }
+          ],
+          "title": "Area",
+          "type": "array"
+        },
+        "colorToken": {
+          "minLength": 1,
+          "pattern": ".*\\S.*",
+          "title": "Colortoken",
+          "type": "string"
+        },
+        "opacity": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Opacity",
+          "type": "number"
+        },
+        "zIndex": {
+          "default": 0,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Zindex",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "shape",
+        "area",
+        "colorToken"
+      ],
+      "title": "ShapeLayer",
+      "type": "object"
+    },
     "Slot": {
       "additionalProperties": false,
       "allOf": [
@@ -143,6 +388,20 @@
           ],
           "default": null,
           "title": "Role"
+        },
+        "colorToken": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Colortoken"
         },
         "maxChars": {
           "anyOf": [
@@ -218,6 +477,127 @@
           "default": true,
           "title": "Required",
           "type": "boolean"
+        },
+        "zIndex": {
+          "anyOf": [
+            {
+              "maximum": 20,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zindex"
+        },
+        "opacity": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Opacity",
+          "type": "number"
+        },
+        "textAlign": {
+          "default": "left",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ],
+          "title": "Textalign",
+          "type": "string"
+        },
+        "textTransform": {
+          "default": "none",
+          "enum": [
+            "none",
+            "uppercase"
+          ],
+          "title": "Texttransform",
+          "type": "string"
+        },
+        "letterSpacingEm": {
+          "default": 0.0,
+          "maximum": 0.5,
+          "minimum": -0.1,
+          "title": "Letterspacingem",
+          "type": "number"
+        },
+        "fillMode": {
+          "default": "fill",
+          "enum": [
+            "fill",
+            "stroke"
+          ],
+          "title": "Fillmode",
+          "type": "string"
+        },
+        "strokeColorToken": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strokecolortoken"
+        },
+        "strokeWidthPx": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 20.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Strokewidthpx"
+        },
+        "assetToken": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assettoken"
+        },
+        "emphasisColorToken": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emphasiscolortoken"
+        },
+        "textFormat": {
+          "default": "plain",
+          "enum": [
+            "plain",
+            "zero-padded"
+          ],
+          "title": "Textformat",
+          "type": "string"
         }
       },
       "required": [
@@ -403,6 +783,47 @@
         "$ref": "#/$defs/Slot"
       },
       "title": "Slots",
+      "type": "array"
+    },
+    "compositionMode": {
+      "anyOf": [
+        {
+          "enum": [
+            "light",
+            "dark"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compositionmode"
+    },
+    "lockedLayers": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "asset": "#/$defs/AssetLayer",
+            "motif": "#/$defs/MotifLayer",
+            "shape": "#/$defs/ShapeLayer"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ShapeLayer"
+          },
+          {
+            "$ref": "#/$defs/MotifLayer"
+          },
+          {
+            "$ref": "#/$defs/AssetLayer"
+          }
+        ]
+      },
+      "title": "Lockedlayers",
       "type": "array"
     }
   },

@@ -173,15 +173,136 @@ class BrandInfo(CamelModel):
     name: str
 
 
+class CompositionMode(CamelModel):
+    """Combinação semântica fechada para uma peça clara ou escura."""
+
+    background_color_token: str
+    foreground_color_token: str
+    logo_asset_token: str | None = None
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class CompositionModes(CamelModel):
+    """Modos editoriais explicitamente declarados pelo sistema de marca."""
+
+    light: CompositionMode | None = None
+    dark: CompositionMode | None = None
+
+
+class ColorRatioRule(CamelModel):
+    """Participação declarada de um token na composição cromática."""
+
+    color_token: str
+    ratio: float = Field(gt=0.0, le=1.0, allow_inf_nan=False)
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class AccentRule(CamelModel):
+    """Limite de presença da cor de acento na área total da peça."""
+
+    color_token: str
+    max_ratio: float = Field(gt=0.0, le=1.0, allow_inf_nan=False)
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class MotifRule(CamelModel):
+    """Motivo gráfico pertencente ao vocabulário fechado do renderer."""
+
+    kind: Literal["diagonal-lines"]
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class NumberingRule(CamelModel):
+    """Tratamento editorial fechado para índices e sequências."""
+
+    style: Literal["zero-padded"]
+    min_digits: int = Field(default=2, ge=2, le=8)
+    evidence: list[Evidence] = Field(default_factory=list)
+
+
+class CompositionRules(CamelModel):
+    """Gramática editorial extraída de declarações explícitas das diretrizes."""
+
+    modes: CompositionModes = Field(default_factory=CompositionModes)
+    color_ratios: list[ColorRatioRule] = Field(default_factory=list)
+    accent: AccentRule | None = None
+    motifs: list[MotifRule] = Field(default_factory=list)
+    numbering: NumberingRule | None = None
+
+    @model_validator(mode="after")
+    def _unique_closed_rules(self) -> Self:
+        tokens = [item.color_token for item in self.color_ratios]
+        if len(tokens) != len(set(tokens)):
+            raise ValueError("Cada token pode ter apenas uma proporção cromática.")
+        motif_kinds = [item.kind for item in self.motifs]
+        if len(motif_kinds) != len(set(motif_kinds)):
+            raise ValueError("Cada motivo pode aparecer apenas uma vez nas regras.")
+        return self
+
+
 class BrandIR(CamelModel):
     """Contrato imutável da marca consumido pelo kit, guard e renderer."""
 
-    schema_version: Literal["0.1.0", "0.2.0"] = "0.2.0"
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+        json_schema_extra={
+            "allOf": [
+                {
+                    "if": {
+                        "required": ["compositionRules"],
+                        "properties": {
+                            "compositionRules": {"not": {"type": "null"}},
+                        },
+                    },
+                    "then": {
+                        "required": ["schemaVersion"],
+                        "properties": {"schemaVersion": {"const": "0.3.0"}},
+                    },
+                }
+            ]
+        },
+    )
+
+    schema_version: Literal["0.1.0", "0.2.0", "0.3.0"] = "0.3.0"
     brand: BrandInfo
     revision: RevisionInfo
     colors: dict[str, ColorToken]
     fonts: dict[str, FontToken]
     roles: dict[str, SemanticRole]
     assets: dict[str, LogoAsset]
+    composition_rules: CompositionRules | None = None
     format_profiles: list[str] = ["post-1x1", "post-4x5", "story-9x16", "doc-a4"]
     diagnostics: list[Diagnostic] = []
+
+    @model_validator(mode="after")
+    def _composition_references_exist(self) -> Self:
+        rules = self.composition_rules
+        if rules is None:
+            return self
+        if "schema_version" not in self.model_fields_set:
+            raise ValueError("compositionRules exige schemaVersion 0.3.0 explícita.")
+        if self.schema_version != "0.3.0":
+            raise ValueError("compositionRules pertence apenas ao Brand IR 0.3.0.")
+
+        missing: list[str] = []
+        for name, mode in (("light", rules.modes.light), ("dark", rules.modes.dark)):
+            if mode is None:
+                continue
+            if mode.background_color_token not in self.colors:
+                missing.append(f"modes.{name}.backgroundColorToken")
+            if mode.foreground_color_token not in self.colors:
+                missing.append(f"modes.{name}.foregroundColorToken")
+            if mode.logo_asset_token is not None and mode.logo_asset_token not in self.assets:
+                missing.append(f"modes.{name}.logoAssetToken")
+        for index, ratio in enumerate(rules.color_ratios):
+            if ratio.color_token not in self.colors:
+                missing.append(f"colorRatios.{index}.colorToken")
+        if rules.accent is not None and rules.accent.color_token not in self.colors:
+            missing.append("accent.colorToken")
+        if missing:
+            raise ValueError(
+                "compositionRules referencia tokens ausentes: " + ", ".join(missing) + "."
+            )
+        return self

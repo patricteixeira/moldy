@@ -1,5 +1,8 @@
 export const SLOT_LABELS: Record<string, string> = {
-  headline: "Título",
+  kicker: "Frase de apoio",
+  headline: "Frase principal",
+  index: "Número",
+  signature: "Assinatura",
   title: "Título",
   quote: "Citação",
   author: "Autor(a)",

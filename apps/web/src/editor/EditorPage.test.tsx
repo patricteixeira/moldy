@@ -5,7 +5,13 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { ApiProvider } from "../api/context"
 import { ApiError } from "../api/client"
 import type { ApiClient, ContentSpec } from "../api/types"
-import { fakeClient, fakeOnePagerLayout, fakeQuoteLayout, fakeStatementLayout } from "../test/fakeApi"
+import {
+  fakeClient,
+  fakeEditorialLayout,
+  fakeOnePagerLayout,
+  fakeQuoteLayout,
+  fakeStatementLayout,
+} from "../test/fakeApi"
 import { mounts } from "../test/renderStub"
 import { EditorPage } from "./EditorPage"
 
@@ -53,6 +59,95 @@ it("digitar num slot atualiza o preview ao vivo", async () => {
   await waitFor(() =>
     expect(lastPayload().contentSpec.values["headline"]).toEqual({ kind: "text", text: "Olá mundo" }),
   )
+})
+
+it("oferece destaque leigo no arquétipo editorial e o preserva ao editar a frase", async () => {
+  renderEditor(
+    fakeClient({ getKit: vi.fn(async () => [fakeEditorialLayout()]) }),
+    "editorial-light-post-4x5",
+  )
+
+  const headline = await screen.findByRole("textbox", { name: "Frase principal" })
+  expect(screen.getByRole("textbox", { name: "Trecho em destaque" })).toBeDisabled()
+
+  await userEvent.type(headline, "A ideia vira forma")
+  const emphasis = screen.getByRole("textbox", { name: "Trecho em destaque" })
+  expect(emphasis).toHaveAccessibleDescription(
+    "Copie exatamente uma parte da frase principal.",
+  )
+  expect(emphasis).toBeEnabled()
+  expect(emphasis).toBeRequired()
+  expect(emphasis).toHaveAttribute("aria-required", "true")
+
+  await userEvent.type(emphasis, "ideia")
+  await userEvent.type(headline, "!")
+
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.values.headline).toEqual({
+      kind: "text",
+      text: "A ideia vira forma!",
+      emphasis: "ideia",
+    }),
+  )
+})
+
+it("orienta um destaque inválido sem quebrar a prova ao vivo", async () => {
+  renderEditor(
+    fakeClient({ getKit: vi.fn(async () => [fakeEditorialLayout()]) }),
+    "editorial-light-post-4x5",
+  )
+
+  const headline = await screen.findByRole("textbox", { name: "Frase principal" })
+  await userEvent.type(headline, "Uma ideia")
+  const emphasis = screen.getByRole("textbox", { name: "Trecho em destaque" })
+  await userEvent.type(emphasis, "outro trecho")
+
+  expect(emphasis).toHaveValue("outro trecho")
+  expect(emphasis).toHaveAttribute("aria-invalid", "true")
+  expect(screen.getByText(/apareça exatamente uma vez/i)).toBeInTheDocument()
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.values.headline).toEqual({
+      kind: "text",
+      text: "Uma ideia",
+      emphasis: undefined,
+    }),
+  )
+
+  await userEvent.clear(emphasis)
+  await userEvent.type(emphasis, "ideia")
+  expect(emphasis).not.toHaveAttribute("aria-invalid")
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.values.headline).toEqual({
+      kind: "text",
+      text: "Uma ideia",
+      emphasis: "ideia",
+    }),
+  )
+})
+
+it("nomeia os campos editoriais em PT-BR sem expor o contrato técnico", async () => {
+  renderEditor(
+    fakeClient({ getKit: vi.fn(async () => [fakeEditorialLayout()]) }),
+    "editorial-light-post-4x5",
+  )
+
+  await screen.findByRole("textbox", { name: "Frase principal" })
+  expect(
+    screen.getByRole("textbox", { name: "Frase de apoio (opcional)" }),
+  ).toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "Número" })).toBeInTheDocument()
+  expect(screen.getByRole("textbox", { name: "Assinatura (opcional)" })).toBeInTheDocument()
+
+  const visible = document.body.textContent ?? ""
+  expect(visible).not.toMatch(/#[0-9A-Fa-f]{6}/)
+  expect(visible).not.toMatch(/\bpx\b/i)
+  expect(visible).not.toMatch(/token|compositionMode|lockedLayers/i)
+})
+
+it("layout legado não ganha o campo de destaque", async () => {
+  renderEditor(kitClient())
+  await screen.findByTestId("slot-input-headline")
+  expect(screen.queryByRole("textbox", { name: "Trecho em destaque" })).not.toBeInTheDocument()
 })
 
 it("contador marca excesso sem truncar o texto", async () => {

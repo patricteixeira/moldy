@@ -1,7 +1,7 @@
 import { chooseFontSize } from "./fit";
 import { buildFontFaces, joinUrl } from "./fonts";
 import { roleStyle } from "./styles";
-import type { GuardReport, Payload, Slot } from "./types";
+import type { CompositionModeRule, GuardReport, LockedLayer, Payload, Slot } from "./types";
 
 export interface RenderOptions {
   measureText?: (contentEl: HTMLElement, fontSizePx: number) => number;
@@ -10,8 +10,10 @@ export interface RenderOptions {
 
 const Z_INDEX: Record<Slot["kind"], string> = { image: "1", text: "2", logo: "3" };
 
-function applyBoxStyle(box: HTMLElement, slot: Slot): void {
-  const [left, top, width, height] = slot.area;
+type Area = [number, number, number, number];
+
+function applyAreaStyle(box: HTMLElement, area: Area, zIndex: string): void {
+  const [left, top, width, height] = area;
   Object.assign(box.style, {
     all: "initial",
     boxSizing: "border-box",
@@ -22,8 +24,15 @@ function applyBoxStyle(box: HTMLElement, slot: Slot): void {
     width: `${width}px`,
     height: `${height}px`,
     overflow: "hidden",
-    zIndex: Z_INDEX[slot.kind],
+    zIndex,
   });
+}
+
+function applyBoxStyle(box: HTMLElement, slot: Slot): void {
+  applyAreaStyle(box, slot.area, String(slot.zIndex ?? Z_INDEX[slot.kind]));
+  if (slot.opacity !== undefined && slot.opacity !== null) {
+    box.style.opacity = String(slot.opacity);
+  }
 }
 
 function createImage(src: string, fit: "cover" | "contain"): HTMLImageElement {
@@ -39,6 +48,76 @@ function createImage(src: string, fit: "cover" | "contain"): HTMLImageElement {
     display: "block",
   });
   return image;
+}
+
+function activeCompositionMode(payload: Payload): CompositionModeRule | null {
+  const name = payload.layoutSpec.compositionMode;
+  if (name !== "light" && name !== "dark") return null;
+  return payload.brandIr.compositionRules?.modes?.[name] ?? null;
+}
+
+function appendLockedLayer(
+  container: HTMLElement,
+  payload: Payload,
+  layer: LockedLayer,
+  index: number,
+): void {
+  const element = document.createElement("div");
+  element.dataset.lockedLayerIndex = String(index);
+  element.dataset.layerKind = layer.kind;
+  element.dataset.layerId = layer.id;
+  applyAreaStyle(element, layer.area, String(layer.zIndex ?? 0));
+
+  if (layer.kind === "shape") {
+    element.style.backgroundColor = payload.brandIr.colors[layer.colorToken].value;
+    element.style.opacity = String(layer.opacity ?? 1);
+    if (layer.shape === "circle") element.style.borderRadius = "50%";
+  } else if (layer.kind === "motif") {
+    const color = payload.brandIr.colors[layer.colorToken].value;
+    element.style.opacity = String(layer.opacity ?? 1);
+    element.style.backgroundImage = [
+      "repeating-linear-gradient(135deg",
+      `${color} 0px`,
+      `${color} ${layer.strokeWidthPx}px`,
+      `transparent ${layer.strokeWidthPx}px`,
+      `transparent ${layer.spacingPx}px)`,
+    ].join(", ");
+  } else {
+    const asset = payload.brandIr.assets[layer.assetToken];
+    element.style.opacity = String(layer.opacity ?? 1);
+    element.appendChild(
+      createImage(joinUrl(payload.assetsBaseUrl, asset.path), layer.fit ?? "contain"),
+    );
+  }
+  container.appendChild(element);
+}
+
+function appendTextWithEmphasis(
+  element: HTMLElement,
+  text: string,
+  emphasis: string | null | undefined,
+  emphasisColor: string | null,
+): void {
+  if (!emphasis || !emphasisColor) {
+    element.textContent = text;
+    return;
+  }
+  const start = text.indexOf(emphasis);
+  if (start < 0) {
+    element.textContent = text;
+    return;
+  }
+  const span = document.createElement("span");
+  span.dataset.emphasis = "";
+  span.textContent = emphasis;
+  span.style.all = "unset";
+  span.style.color = emphasisColor;
+  span.style.setProperty("-webkit-text-stroke", "0px transparent");
+  element.append(
+    document.createTextNode(text.slice(0, start)),
+    span,
+    document.createTextNode(text.slice(start + emphasis.length)),
+  );
 }
 
 export function renderDocument(
@@ -60,8 +139,10 @@ export function renderDocument(
     height: `${layout.canvas.heightPx}px`,
     backgroundColor: "",
   });
+  const compositionMode = activeCompositionMode(payload);
   if (layout.background.kind === "color" && layout.background.colorToken) {
-    container.style.backgroundColor = ir.colors[layout.background.colorToken].value;
+    const token = compositionMode?.backgroundColorToken ?? layout.background.colorToken;
+    container.style.backgroundColor = ir.colors[token].value;
   }
 
   const fontBuild = buildFontFaces(ir, payload.assetsBaseUrl);
@@ -69,20 +150,26 @@ export function renderDocument(
   style.textContent = fontBuild.css;
   container.appendChild(style);
 
+  for (const [index, layer] of (layout.lockedLayers ?? []).entries()) {
+    appendLockedLayer(container, payload, layer, index);
+  }
+
   const report: GuardReport = { overflows: [], fontFallbacks: [] };
   const measureText = options.measureText ?? ((element: HTMLElement) => element.scrollHeight);
 
   for (const slot of layout.slots) {
     const value = content.values[slot.id];
-    if (slot.kind !== "logo" && (!value || value.kind !== slot.kind)) continue;
+    if (slot.kind === "text" && value?.kind !== "text") continue;
+    if (slot.kind === "image" && value?.kind !== "image") continue;
 
     const box = document.createElement("div");
     box.dataset.slotId = slot.id;
     applyBoxStyle(box, slot);
 
     if (slot.kind === "logo") {
+      const assetToken = slot.assetToken ?? compositionMode?.logoAssetToken ?? "logo.primary";
       box.appendChild(
-        createImage(joinUrl(payload.assetsBaseUrl, ir.assets["logo.primary"].path), "contain"),
+        createImage(joinUrl(payload.assetsBaseUrl, ir.assets[assetToken].path), "contain"),
       );
       container.appendChild(box);
       continue;
@@ -98,7 +185,9 @@ export function renderDocument(
       const textStyle = roleStyle(ir, slot.role, fontBuild.families);
       const contentElement = document.createElement("div");
       contentElement.dataset.slotContent = "";
-      contentElement.textContent = value.text;
+      const colorToken = slot.colorToken ?? compositionMode?.foregroundColorToken;
+      const color = colorToken ? ir.colors[colorToken].value : textStyle.color;
+      const fillMode = slot.fillMode ?? "fill";
       Object.assign(contentElement.style, {
         all: "initial",
         boxSizing: "border-box",
@@ -106,17 +195,40 @@ export function renderDocument(
         fontFamily: textStyle.fontFamily,
         fontWeight: textStyle.fontWeight,
         fontStyle: textStyle.fontStyle,
-        color: textStyle.color,
+        color: fillMode === "stroke" ? "transparent" : color,
         lineHeight: textStyle.lineHeight,
         whiteSpace: "pre-wrap",
         overflowWrap: "break-word",
         textRendering: "optimizeLegibility",
         fontFeatureSettings: '"kern" 1, "liga" 1',
-        letterSpacing: "normal",
+        letterSpacing:
+          slot.letterSpacingEm === undefined || slot.letterSpacingEm === null
+            ? "normal"
+            : `${slot.letterSpacingEm}em`,
         textIndent: "0",
-        textTransform: "none",
+        textAlign: slot.textAlign ?? "left",
+        textTransform: slot.textTransform ?? "none",
         wordSpacing: "normal",
       });
+      if (fillMode === "stroke") {
+        const strokeToken =
+          slot.strokeColorToken ?? slot.colorToken ?? compositionMode?.foregroundColorToken;
+        const strokeColor = strokeToken ? ir.colors[strokeToken].value : textStyle.color;
+        contentElement.style.setProperty(
+          "-webkit-text-stroke",
+          `${slot.strokeWidthPx ?? 1}px ${strokeColor}`,
+        );
+        contentElement.style.setProperty("paint-order", "stroke fill");
+      }
+      const emphasisColor = slot.emphasisColorToken
+        ? ir.colors[slot.emphasisColorToken].value
+        : null;
+      const minimumDigits = ir.compositionRules?.numbering?.minDigits ?? 2;
+      const text =
+        slot.textFormat === "zero-padded" && /^\d+$/.test(value.text)
+          ? value.text.padStart(minimumDigits, "0")
+          : value.text;
+      appendTextWithEmphasis(contentElement, text, value.emphasis, emphasisColor);
       box.appendChild(contentElement);
       container.appendChild(box);
 

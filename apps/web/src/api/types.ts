@@ -88,8 +88,25 @@ export interface BrandIr {
       clearSpaceRatio: number
     }
   >
+  compositionRules?: {
+    modes: {
+      light?: CompositionMode | null
+      dark?: CompositionMode | null
+    }
+    colorRatios: Array<{ colorToken: string; ratio: number; evidence: Evidence[] }>
+    accent?: { colorToken: string; maxRatio: number; evidence: Evidence[] } | null
+    motifs: Array<{ kind: "diagonal-lines"; evidence: Evidence[] }>
+    numbering?: { style: "zero-padded"; minDigits: number; evidence: Evidence[] } | null
+  } | null
   formatProfiles: string[]
   diagnostics: Diagnostic[]
+}
+
+export interface CompositionMode {
+  backgroundColorToken: string
+  foregroundColorToken: string
+  logoAssetToken?: string | null
+  evidence: Evidence[]
 }
 
 export interface Slot {
@@ -101,7 +118,53 @@ export interface Slot {
   area: [number, number, number, number]
   fit: "shrink-within-role-range" | "fixed"
   required: boolean
+  colorToken?: string | null
+  zIndex?: number | null
+  opacity?: number
+  textAlign?: "left" | "center" | "right"
+  textTransform?: "none" | "uppercase"
+  letterSpacingEm?: number
+  fillMode?: "fill" | "stroke"
+  strokeColorToken?: string | null
+  strokeWidthPx?: number | null
+  assetToken?: string | null
+  emphasisColorToken?: string | null
+  textFormat?: "plain" | "zero-padded"
 }
+
+export interface ShapeLayer {
+  id: string
+  kind: "shape"
+  shape: "rectangle" | "circle"
+  area: [number, number, number, number]
+  colorToken: string
+  opacity: number
+  zIndex: number
+}
+
+export interface MotifLayer {
+  id: string
+  kind: "motif"
+  motif: "diagonal-lines"
+  area: [number, number, number, number]
+  colorToken: string
+  opacity: number
+  strokeWidthPx: number
+  spacingPx: number
+  zIndex: number
+}
+
+export interface AssetLayer {
+  id: string
+  kind: "asset"
+  assetToken: string
+  area: [number, number, number, number]
+  fit: "contain" | "cover"
+  opacity: number
+  zIndex: number
+}
+
+export type LockedLayer = ShapeLayer | MotifLayer | AssetLayer
 
 export interface LayoutSpec {
   id: string
@@ -110,10 +173,12 @@ export interface LayoutSpec {
   canvas: { widthPx: number; heightPx: number; safeAreaPx: number }
   background: { kind: "color" | "image-slot"; colorToken?: string | null }
   slots: Slot[]
+  compositionMode?: "light" | "dark" | null
+  lockedLayers?: LockedLayer[]
 }
 
 export type SlotValue =
-  | { kind: "text"; text: string }
+  | { kind: "text"; text: string; emphasis?: string | null }
   | { kind: "image"; path: string; sha256?: string | null }
 
 export interface ContentSpec {

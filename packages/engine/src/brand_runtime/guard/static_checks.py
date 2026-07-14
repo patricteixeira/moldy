@@ -15,6 +15,7 @@ from brand_runtime.ir.models import BrandIR, CamelModel
 from brand_runtime.kit.models import ContentSpec, ImageValue, LayoutSpec, Slot, TextValue
 
 _RASTER_FORMATS = {"PNG", "JPEG"}
+_TEXT_INK_COVERAGE = 0.1
 
 
 class GuardCheck(CamelModel):
@@ -105,6 +106,168 @@ def _contract_checks(ir: BrandIR, layout: LayoutSpec, content: ContentSpec) -> l
     return checks
 
 
+def _reference_checks(ir: BrandIR, layout: LayoutSpec) -> list[GuardCheck]:
+    """Falha fechado quando o layout aponta para tokens ausentes da revisão."""
+    checks: list[GuardCheck] = []
+
+    if layout.background.kind == "color" and layout.background.color_token not in ir.colors:
+        checks.append(
+            _blocked(
+                "layout-reference",
+                "A cor de fundo prevista por este layout não está disponível na marca.",
+                detail={
+                    "referenceType": "backgroundColor",
+                    "colorToken": layout.background.color_token,
+                },
+            )
+        )
+
+    composition_mode = getattr(layout, "composition_mode", None)
+    if composition_mode is not None:
+        rules = ir.composition_rules
+        mode = getattr(rules.modes, composition_mode, None) if rules is not None else None
+        if mode is None:
+            checks.append(
+                _blocked(
+                    "layout-reference",
+                    "O modo visual previsto por este layout não está disponível na marca.",
+                    detail={"referenceType": "compositionMode", "mode": composition_mode},
+                )
+            )
+        else:
+            if (
+                layout.background.kind != "color"
+                or layout.background.color_token != mode.background_color_token
+            ):
+                checks.append(
+                    _blocked(
+                        "layout-reference",
+                        "O fundo deste layout não corresponde ao modo visual escolhido.",
+                        detail={
+                            "referenceType": "compositionModeBackground",
+                            "compositionMode": composition_mode,
+                            "expectedColorToken": mode.background_color_token,
+                            "actualColorToken": layout.background.color_token,
+                        },
+                    )
+                )
+            for field, color_token in (
+                ("backgroundColorToken", mode.background_color_token),
+                ("foregroundColorToken", mode.foreground_color_token),
+            ):
+                if color_token not in ir.colors:
+                    checks.append(
+                        _blocked(
+                            "layout-reference",
+                            "Uma cor do modo visual deste layout não está disponível na marca.",
+                            detail={
+                                "referenceType": field,
+                                "compositionMode": composition_mode,
+                                "colorToken": color_token,
+                            },
+                        )
+                    )
+            if mode.logo_asset_token is not None and mode.logo_asset_token not in ir.assets:
+                checks.append(
+                    _blocked(
+                        "layout-reference",
+                        "O logo previsto pelo modo visual não está disponível na marca.",
+                        detail={
+                            "referenceType": "compositionModeLogo",
+                            "compositionMode": composition_mode,
+                            "assetToken": mode.logo_asset_token,
+                        },
+                    )
+                )
+
+    for layer in getattr(layout, "locked_layers", []):
+        if layer.kind == "asset":
+            asset = ir.assets.get(layer.asset_token)
+            if asset is None:
+                checks.append(
+                    _blocked(
+                        "layout-reference",
+                        "Um elemento fixo deste layout não está disponível na marca.",
+                        detail={
+                            "referenceType": "lockedLayerAsset",
+                            "layerId": layer.id,
+                            "assetToken": layer.asset_token,
+                        },
+                    )
+                )
+            else:
+                _, _, width, height = layer.area
+                if width < asset.min_width_px:
+                    checks.append(
+                        _blocked(
+                            "asset-size",
+                            "Um elemento fixo da marca está menor do que o uso permitido.",
+                            detail={
+                                "layerId": layer.id,
+                                "assetToken": layer.asset_token,
+                                "width": width,
+                                "height": height,
+                                "minWidth": asset.min_width_px,
+                            },
+                        )
+                    )
+            continue
+        if layer.kind == "motif":
+            rules = ir.composition_rules
+            declared_motifs = {item.kind for item in rules.motifs} if rules is not None else set()
+            if layer.motif not in declared_motifs:
+                checks.append(
+                    _blocked(
+                        "layout-reference",
+                        "Um motivo fixo deste layout não pertence ao sistema da marca.",
+                        detail={
+                            "referenceType": "lockedLayerMotif",
+                            "layerId": layer.id,
+                            "motif": layer.motif,
+                        },
+                    )
+                )
+        if layer.color_token not in ir.colors:
+            checks.append(
+                _blocked(
+                    "layout-reference",
+                    "Uma cor de uma camada fixa não está disponível na marca.",
+                    detail={
+                        "referenceType": "lockedLayerColor",
+                        "layerId": layer.id,
+                        "colorToken": layer.color_token,
+                    },
+                )
+            )
+
+    for slot in layout.slots:
+        for field, color_token in (
+            ("colorToken", getattr(slot, "color_token", None)),
+            ("strokeColorToken", getattr(slot, "stroke_color_token", None)),
+            ("emphasisColorToken", getattr(slot, "emphasis_color_token", None)),
+        ):
+            if color_token is not None and color_token not in ir.colors:
+                checks.append(
+                    _blocked(
+                        "layout-reference",
+                        f"Uma cor prevista para «{slot.id}» não está disponível na marca.",
+                        slot_id=slot.id,
+                        detail={"referenceType": field, "colorToken": color_token},
+                    )
+                )
+        asset_token = getattr(slot, "asset_token", None)
+        if asset_token is not None and asset_token not in ir.assets:
+            checks.append(
+                _blocked(
+                    "layout-reference",
+                    f"O elemento de marca previsto para «{slot.id}» não está disponível.",
+                    slot_id=slot.id,
+                    detail={"referenceType": "slotAsset", "assetToken": asset_token},
+                )
+            )
+    return checks
+
+
 def _is_blank_required_text(slot: Slot, value: TextValue | ImageValue | None) -> bool:
     """Trata texto obrigatório vazio como ausência de conteúdo."""
     return slot.kind == "text" and isinstance(value, TextValue) and not value.text.strip()
@@ -172,6 +335,79 @@ def _text_length_checks(layout: LayoutSpec, content: ContentSpec) -> list[GuardC
                 _passed(
                     "text-length",
                     f"O texto de «{slot.id}» está dentro do limite deste layout.",
+                    slot_id=slot.id,
+                    detail=detail,
+                )
+            )
+    return checks
+
+
+def _exact_occurrence_count(text: str, excerpt: str) -> int:
+    """Conta ocorrências exatas, inclusive as sobrepostas, para um binding inequívoco."""
+    if not excerpt:
+        return 0
+    return sum(1 for index in range(len(text)) if text.startswith(excerpt, index))
+
+
+def _emphasis_checks(layout: LayoutSpec, content: ContentSpec) -> list[GuardCheck]:
+    """Exige um único trecho literal quando o layout prevê destaque editorial."""
+    checks: list[GuardCheck] = []
+    for slot in layout.slots:
+        if slot.kind != "text":
+            continue
+        value = content.values.get(slot.id)
+        if not isinstance(value, TextValue) or not value.text.strip():
+            continue
+
+        emphasis_color = getattr(slot, "emphasis_color_token", None)
+        emphasis = getattr(value, "emphasis", None)
+        if emphasis_color is None:
+            if emphasis is not None and emphasis.strip():
+                checks.append(
+                    _blocked(
+                        "emphasis",
+                        f"Este layout não prevê um trecho em destaque em «{slot.id}».",
+                        slot_id=slot.id,
+                    )
+                )
+            continue
+
+        if emphasis is None or not emphasis.strip():
+            checks.append(
+                _blocked(
+                    "emphasis",
+                    f"Escolha um trecho da frase de «{slot.id}» para destacar.",
+                    slot_id=slot.id,
+                    detail={"occurrences": 0},
+                )
+            )
+            continue
+
+        occurrences = _exact_occurrence_count(value.text, emphasis)
+        detail = {"occurrences": occurrences, "emphasisChars": len(emphasis)}
+        if occurrences == 0:
+            checks.append(
+                _blocked(
+                    "emphasis",
+                    "O trecho em destaque precisa ser copiado exatamente da frase principal.",
+                    slot_id=slot.id,
+                    detail=detail,
+                )
+            )
+        elif occurrences > 1:
+            checks.append(
+                _blocked(
+                    "emphasis",
+                    "Escolha um trecho que apareça apenas uma vez na frase principal.",
+                    slot_id=slot.id,
+                    detail=detail,
+                )
+            )
+        else:
+            checks.append(
+                _passed(
+                    "emphasis",
+                    "O trecho em destaque está ligado à frase principal.",
                     slot_id=slot.id,
                     detail=detail,
                 )
@@ -319,8 +555,118 @@ def _image_resolution_checks(
     return checks
 
 
+def _accent_usage_checks(
+    ir: BrandIR,
+    layout: LayoutSpec,
+    content: ContentSpec,
+) -> list[GuardCheck]:
+    """Estima a tinta do acento por área, fração textual e cobertura tipográfica."""
+    rules = ir.composition_rules
+    accent = rules.accent if rules is not None else None
+    if accent is None:
+        return []
+
+    canvas_area = layout.canvas.width_px * layout.canvas.height_px
+    locked_ratio = 0.0
+    locked_ids: list[str] = []
+    for layer in getattr(layout, "locked_layers", []):
+        if getattr(layer, "color_token", None) != accent.color_token:
+            continue
+        _, _, width, height = layer.area
+        locked_ratio += (width * height / canvas_area) * layer.opacity
+        locked_ids.append(layer.id)
+
+    emphasis_ratio = 0.0
+    emphasis_slots: list[str] = []
+    for slot in layout.slots:
+        if slot.kind != "text" or getattr(slot, "emphasis_color_token", None) != accent.color_token:
+            continue
+        value = content.values.get(slot.id)
+        emphasis = getattr(value, "emphasis", None) if isinstance(value, TextValue) else None
+        if (
+            not isinstance(value, TextValue)
+            or not value.text
+            or emphasis is None
+            or not emphasis
+            or _exact_occurrence_count(value.text, emphasis) != 1
+        ):
+            continue
+        _, _, width, height = slot.area
+        emphasis_ratio += (
+            (width * height / canvas_area)
+            * (len(emphasis) / len(value.text))
+            * slot.opacity
+            * _TEXT_INK_COVERAGE
+        )
+        emphasis_slots.append(slot.id)
+
+    if not locked_ids and not emphasis_slots:
+        return []
+
+    estimated_ratio = locked_ratio + emphasis_ratio
+    detail = {
+        "estimatedRatio": round(estimated_ratio, 6),
+        "maxRatio": accent.max_ratio,
+        "lockedLayersRatio": round(locked_ratio, 6),
+        "emphasisRatio": round(emphasis_ratio, 6),
+        "textInkCoverage": _TEXT_INK_COVERAGE,
+        "lockedLayerIds": locked_ids,
+        "emphasisSlotIds": emphasis_slots,
+    }
+    if estimated_ratio > accent.max_ratio + 1e-6:
+        return [
+            _blocked(
+                "accent-ratio",
+                "O destaque ocupa mais espaço do que este sistema de marca permite.",
+                detail=detail,
+            )
+        ]
+    return [
+        _passed(
+            "accent-ratio",
+            "A presença do destaque respeita o limite deste sistema de marca.",
+            detail=detail,
+        )
+    ]
+
+
+def _contrast_check(
+    *,
+    check_id: str,
+    slot: Slot,
+    foreground: str | None,
+    background: str | None,
+    threshold: float,
+    emphasis: bool = False,
+) -> GuardCheck:
+    """Avalia uma combinação de texto sem expor a razão na mensagem leiga."""
+    subject = "trecho em destaque" if emphasis else "texto"
+    if foreground is None or background is None:
+        return _blocked(
+            check_id,
+            f"Não foi possível avaliar o contraste do {subject} de «{slot.id}».",
+            slot_id=slot.id,
+            detail={"missingReference": True, "threshold": threshold},
+        )
+    ratio = wcag_contrast(foreground, background)
+    detail = {"ratio": round(ratio, 2), "threshold": threshold}
+    if ratio < threshold:
+        return _blocked(
+            check_id,
+            f"O contraste do {subject} de «{slot.id}» com o fundo é insuficiente para leitura.",
+            slot_id=slot.id,
+            detail=detail,
+        )
+    return _passed(
+        check_id,
+        f"O contraste do {subject} de «{slot.id}» é suficiente para leitura.",
+        slot_id=slot.id,
+        detail=detail,
+    )
+
+
 def _contrast_checks(ir: BrandIR, layout: LayoutSpec) -> list[GuardCheck]:
-    """Avalia contraste de todo texto sobre fundo sólido da marca."""
+    """Avalia texto base e destaque sobre fundo sólido com limiar por tamanho."""
     if layout.background.kind != "color" or layout.background.color_token is None:
         return []
     checks: list[GuardCheck] = []
@@ -329,38 +675,32 @@ def _contrast_checks(ir: BrandIR, layout: LayoutSpec) -> list[GuardCheck]:
         if slot.kind != "text":
             continue
         role = ir.roles.get(slot.role or "")
-        foreground_token = ir.colors.get(role.color) if role is not None else None
-        if role is None or foreground_token is None or background_token is None:
-            checks.append(
-                _blocked(
-                    "contrast",
-                    f"Não foi possível avaliar o contraste do texto de «{slot.id}».",
-                    slot_id=slot.id,
-                    detail={"missingReference": True},
-                )
+        threshold = 3.0 if role is not None and role.min_size_px >= 24 else 4.5
+        foreground_ref = getattr(slot, "color_token", None) or (
+            role.color if role is not None else None
+        )
+        foreground_token = ir.colors.get(foreground_ref) if foreground_ref is not None else None
+        checks.append(
+            _contrast_check(
+                check_id="contrast",
+                slot=slot,
+                foreground=foreground_token.value if foreground_token is not None else None,
+                background=background_token.value if background_token is not None else None,
+                threshold=threshold,
             )
-            continue
-        ratio = wcag_contrast(foreground_token.value, background_token.value)
-        detail = {"ratio": round(ratio, 2)}
-        if ratio < 4.5:
+        )
+
+        emphasis_ref = getattr(slot, "emphasis_color_token", None)
+        if emphasis_ref is not None:
+            emphasis_token = ir.colors.get(emphasis_ref)
             checks.append(
-                _blocked(
-                    "contrast",
-                    (
-                        f"O contraste entre o texto de «{slot.id}» "
-                        "e o fundo é insuficiente para leitura."
-                    ),
-                    slot_id=slot.id,
-                    detail=detail,
-                )
-            )
-        else:
-            checks.append(
-                _passed(
-                    "contrast",
-                    f"O contraste do texto de «{slot.id}» é suficiente para leitura.",
-                    slot_id=slot.id,
-                    detail=detail,
+                _contrast_check(
+                    check_id="emphasis-contrast",
+                    slot=slot,
+                    foreground=emphasis_token.value if emphasis_token is not None else None,
+                    background=background_token.value if background_token is not None else None,
+                    threshold=threshold,
+                    emphasis=True,
                 )
             )
     return checks
@@ -375,8 +715,11 @@ def run_static_checks(
     """Executa o verdict estático em ordem estável sem mutar nenhuma entrada."""
     return [
         *_contract_checks(ir, layout, content),
+        *_reference_checks(ir, layout),
         *_presence_and_type_checks(layout, content),
         *_text_length_checks(layout, content),
+        *_emphasis_checks(layout, content),
         *_image_resolution_checks(layout, content, assets_dir),
+        *_accent_usage_checks(ir, layout, content),
         *_contrast_checks(ir, layout),
     ]

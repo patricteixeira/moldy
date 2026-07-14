@@ -781,6 +781,34 @@
     color: var(--ui-ink);
   }
 
+  .slot-emphasis-field {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+    border-left: 0.25rem solid var(--ui-accent);
+    padding: var(--space-3) 0 var(--space-2) var(--space-4);
+  }
+
+  .slot-emphasis-field input {
+    width: 100%;
+    border: 1px solid var(--ui-ink);
+    padding: var(--space-3);
+    background: var(--ui-surface);
+    color: var(--ui-ink);
+  }
+
+  .field-hint {
+    max-width: 42ch;
+    color: var(--ui-muted);
+    font-size: 0.8125rem;
+  }
+
+  .field-guidance {
+    color: var(--ui-danger);
+    font-size: 0.8125rem;
+    font-weight: 650;
+  }
+
   .char-counter {
     color: var(--ui-muted);
     font-size: 0.8125rem;

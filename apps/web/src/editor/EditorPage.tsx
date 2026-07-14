@@ -6,6 +6,7 @@ import type { BrandIr, ContentSpec, LayoutSpec, SlotValue } from "../api/types"
 import { Preview } from "../render/Preview"
 import { ExportControls } from "./ExportControls"
 import { SlotForm } from "./SlotForm"
+import { exactOccurrenceCount } from "./emphasis"
 
 interface EditorPageProps {
   pollIntervalMs?: number
@@ -71,6 +72,23 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     [layout, revisionId, values],
   )
 
+  const previewContentSpec = useMemo<ContentSpec | null>(() => {
+    if (!contentSpec) return null
+    const previewValues = Object.fromEntries(
+      Object.entries(contentSpec.values).map(([slotId, value]) => {
+        if (
+          value.kind !== "text" ||
+          !value.emphasis ||
+          exactOccurrenceCount(value.text, value.emphasis) === 1
+        ) {
+          return [slotId, value]
+        }
+        return [slotId, { ...value, emphasis: undefined }]
+      }),
+    )
+    return { ...contentSpec, values: previewValues }
+  }, [contentSpec])
+
   if (error) {
     return (
       <main id="main-content" className="editor-page">
@@ -87,7 +105,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     )
   }
 
-  if (!layout || !contentSpec || !revisionId) {
+  if (!layout || !contentSpec || !previewContentSpec || !revisionId) {
     return (
       <main id="main-content" className="editor-page">
         <p role="alert">Layout não encontrado neste kit.</p>
@@ -119,7 +137,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
           <Preview
             brandIr={data.brandIr}
             layoutSpec={layout}
-            contentSpec={contentSpec}
+            contentSpec={previewContentSpec}
             assetsBaseUrl={api.revisionAssetsBaseUrl(revisionId)}
             maxWidthPx={480}
           />

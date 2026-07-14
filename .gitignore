@@ -13,3 +13,6 @@ out/
 apps/web/e2e/.fixtures/
 test-results/
 playwright-report/
+
+# Materiais reais usados apenas como referência local de validação.
+exemplo/

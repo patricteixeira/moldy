@@ -6,9 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from brand_runtime.ir.models import (
+    AccentRule,
     BrandIR,
     BrandInfo,
     ColorToken,
+    CompositionMode,
+    CompositionModes,
+    CompositionRules,
     Evidence,
     FontAxis,
     FontResource,
@@ -66,17 +70,61 @@ def test_color_value_is_normalized():
 def test_json_is_camel_case_and_round_trips():
     ir = _minimal_ir()
     data = json.loads(ir.model_dump_json(by_alias=True))
-    assert data["schemaVersion"] == "0.2.0"
+    assert data["schemaVersion"] == "0.3.0"
     assert data["colors"]["color.primary"]["evidence"][0]["sourceType"] == "wizard-confirmation"
     assert BrandIR.model_validate(data) == ir
 
 
-def test_reader_keeps_accepting_brand_ir_0_1():
+@pytest.mark.parametrize("version", ["0.1.0", "0.2.0"])
+def test_reader_keeps_accepting_older_brand_ir_without_composition(version):
     data = _minimal_ir().model_dump(mode="json", by_alias=True)
-    data["schemaVersion"] = "0.1.0"
+    data["schemaVersion"] = version
     data["fonts"]["font.heading"].pop("resource")
+    data.pop("compositionRules")
 
-    assert BrandIR.model_validate(data).schema_version == "0.1.0"
+    assert BrandIR.model_validate(data).schema_version == version
+
+
+def test_composition_rules_are_03_only_and_references_must_exist():
+    ir = _minimal_ir()
+    rules = CompositionRules(
+        modes=CompositionModes(
+            light=CompositionMode(
+                background_color_token="color.primary",
+                foreground_color_token="color.primary",
+                logo_asset_token="logo.primary",
+            )
+        ),
+        accent=AccentRule(color_token="color.primary", max_ratio=0.1),
+    )
+    assert ir.model_copy(update={"composition_rules": rules}).composition_rules == rules
+
+    with pytest.raises(ValidationError, match="0.3.0"):
+        BrandIR.model_validate(
+            {
+                **ir.model_dump(mode="json", by_alias=True),
+                "schemaVersion": "0.2.0",
+                "compositionRules": rules.model_dump(mode="json", by_alias=True),
+            }
+        )
+
+    without_explicit_version = {
+        **ir.model_dump(mode="json", by_alias=True),
+        "compositionRules": rules.model_dump(mode="json", by_alias=True),
+    }
+    without_explicit_version.pop("schemaVersion")
+    with pytest.raises(ValidationError, match="explícita"):
+        BrandIR.model_validate(without_explicit_version)
+
+    bad = rules.model_copy(deep=True)
+    bad.modes.light.background_color_token = "color.missing"
+    with pytest.raises(ValidationError, match="backgroundColorToken"):
+        BrandIR.model_validate(
+            {
+                **ir.model_dump(mode="json", by_alias=True),
+                "compositionRules": bad.model_dump(mode="json", by_alias=True),
+            }
+        )
 
 
 def test_font_resource_normalizes_coverage_and_axes():
@@ -158,7 +206,12 @@ def test_export_schemas(tmp_path):
     font_token = schema["$defs"]["FontToken"]
     assert font_token["properties"]["resource"]["anyOf"][0]["$ref"] == "#/$defs/FontResource"
     assert "resource" not in font_token["required"]
-    assert set(schema["properties"]["schemaVersion"]["enum"]) == {"0.1.0", "0.2.0"}
+    assert set(schema["properties"]["schemaVersion"]["enum"]) == {
+        "0.1.0",
+        "0.2.0",
+        "0.3.0",
+    }
+    assert schema["allOf"][0]["then"]["required"] == ["schemaVersion"]
 
     committed = Path(__file__).resolve().parents[3] / "schemas" / "brand-ir.schema.json"
     assert committed.read_text(encoding="utf-8") == (tmp_path / "brand-ir.schema.json").read_text(

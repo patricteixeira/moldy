@@ -5,10 +5,13 @@ import pytest
 from brand_runtime.ir.schema import export_schemas
 from brand_runtime.kit.models import (
     PROFILES,
+    AssetLayer,
     Background,
     Canvas,
     ContentSpec,
     LayoutSpec,
+    MotifLayer,
+    ShapeLayer,
     Slot,
     TextValue,
 )
@@ -22,6 +25,46 @@ def test_profiles_match_master_contract():
 def test_text_slot_requires_role():
     with pytest.raises(Exception):
         Slot(id="t", kind="text", area=(0, 0, 10, 10))  # sem role
+
+
+def test_closed_editorial_slot_properties_are_typed_and_scoped():
+    legacy = Slot(id="image", kind="image", area=(0, 0, 10, 10))
+    assert legacy.z_index is None
+
+    outlined = Slot(
+        id="index",
+        kind="text",
+        role="index",
+        area=(0, 0, 100, 100),
+        fill_mode="stroke",
+        stroke_color_token="color.text",
+        stroke_width_px=2.5,
+        text_format="zero-padded",
+        letter_spacing_em=-0.04,
+    )
+    assert outlined.fill_mode == "stroke"
+
+    with pytest.raises(Exception, match="tipográficas"):
+        Slot(
+            id="image",
+            kind="image",
+            area=(0, 0, 10, 10),
+            text_transform="uppercase",
+        )
+    with pytest.raises(Exception, match="exige token"):
+        Slot(
+            id="index",
+            kind="text",
+            role="index",
+            area=(0, 0, 10, 10),
+            fill_mode="stroke",
+        )
+
+
+def test_text_emphasis_is_nonblank_but_can_temporarily_differ_during_editing():
+    assert TextValue(text="Texto novo", emphasis="trecho antigo").emphasis == "trecho antigo"
+    with pytest.raises(Exception):
+        TextValue(text="Texto", emphasis="   ")
 
 
 def test_layout_profile_validated():
@@ -90,6 +133,50 @@ def test_slots_must_fit_and_have_unique_ids():
     duplicate = Slot(id="x", kind="logo", area=(0, 0, 10, 10), fit="fixed")
     with pytest.raises(Exception, match="únicos"):
         _layout(slots=[duplicate, duplicate.model_copy(deep=True)])
+
+
+def test_locked_layers_are_discriminated_ordered_and_inside_canvas():
+    layers = [
+        MotifLayer(
+            id="pattern",
+            motif="diagonal-lines",
+            area=(0, 0, 1080, 1080),
+            color_token="color.text",
+            opacity=0.06,
+            stroke_width_px=2,
+            spacing_px=28,
+        ),
+        ShapeLayer(
+            id="rule",
+            shape="rectangle",
+            area=(48, 48, 56, 4),
+            color_token="color.secondary",
+        ),
+        AssetLayer(
+            id="mark",
+            asset_token="logo.onLight",
+            area=(920, 104, 52, 52),
+        ),
+    ]
+    layout = _layout(locked_layers=layers, composition_mode="light")
+    serialized = layout.model_dump(mode="json", by_alias=True)
+    assert [item["kind"] for item in serialized["lockedLayers"]] == [
+        "motif",
+        "shape",
+        "asset",
+    ]
+
+    with pytest.raises(Exception, match="ultrapassa"):
+        _layout(
+            locked_layers=[
+                ShapeLayer(
+                    id="outside",
+                    shape="circle",
+                    area=(1070, 1070, 20, 20),
+                    color_token="color.secondary",
+                )
+            ]
+        )
 
 
 def test_empty_conditional_references_are_rejected():

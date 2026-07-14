@@ -49,6 +49,20 @@
         "text": {
           "title": "Text",
           "type": "string"
+        },
+        "emphasis": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": ".*\\S.*",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emphasis"
         }
       },
       "required": [

@@ -14,6 +14,10 @@ NonNegativeInt = Annotated[int, Field(ge=0)]
 NonBlankString = Annotated[str, Field(min_length=1, pattern=r".*\S.*")]
 Area = tuple[NonNegativeInt, NonNegativeInt, PositiveInt, PositiveInt]
 Resolution = tuple[PositiveInt, PositiveInt]
+Opacity = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
+ZIndex = Annotated[int, Field(ge=0, le=20)]
+LetterSpacing = Annotated[float, Field(ge=-0.1, le=0.5, allow_inf_nan=False)]
+StrokeWidth = Annotated[float, Field(gt=0.0, le=20.0, allow_inf_nan=False)]
 
 PROFILES: dict[Profile, tuple[int, int, int]] = {
     "post-1x1": (1080, 1080, 48),
@@ -70,18 +74,95 @@ class Slot(CamelModel):
     id: NonBlankString
     kind: Literal["text", "image", "logo"]
     role: NonBlankString | None = None
+    color_token: NonBlankString | None = None
     max_chars: PositiveInt | None = None
     min_resolution: Resolution | None = None
     area: Area
     fit: Literal["shrink-within-role-range", "fixed"] = "shrink-within-role-range"
     required: bool = True
+    z_index: ZIndex | None = None
+    opacity: Opacity = 1.0
+    text_align: Literal["left", "center", "right"] = "left"
+    text_transform: Literal["none", "uppercase"] = "none"
+    letter_spacing_em: LetterSpacing = 0.0
+    fill_mode: Literal["fill", "stroke"] = "fill"
+    stroke_color_token: NonBlankString | None = None
+    stroke_width_px: StrokeWidth | None = None
+    asset_token: NonBlankString | None = None
+    emphasis_color_token: NonBlankString | None = None
+    text_format: Literal["plain", "zero-padded"] = "plain"
 
     @model_validator(mode="after")
     def _text_requires_role(self) -> Slot:
         """Exige papel semântico para que texto use tokens tipográficos do IR."""
         if self.kind == "text" and (self.role is None or not self.role.strip()):
             raise ValueError("Slots de texto precisam informar um papel semântico.")
+        if self.kind != "text" and any(
+            (
+                self.color_token is not None,
+                self.emphasis_color_token is not None,
+                self.text_format != "plain",
+                self.text_align != "left",
+                self.text_transform != "none",
+                self.letter_spacing_em != 0,
+                self.fill_mode != "fill",
+                self.stroke_color_token is not None,
+                self.stroke_width_px is not None,
+            )
+        ):
+            raise ValueError("Propriedades tipográficas só podem ser usadas em slots de texto.")
+        if self.fill_mode == "stroke" and (
+            self.stroke_color_token is None or self.stroke_width_px is None
+        ):
+            raise ValueError("Texto contornado exige token e largura de traço.")
+        if self.fill_mode == "fill" and (
+            self.stroke_color_token is not None or self.stroke_width_px is not None
+        ):
+            raise ValueError("Token e largura de traço exigem fillMode='stroke'.")
+        if self.asset_token is not None and self.kind != "logo":
+            raise ValueError("assetToken só pode ser usado em slots de logo.")
         return self
+
+
+class ShapeLayer(CamelModel):
+    """Forma geométrica fixa e fechada, sem estilos livres."""
+
+    id: NonBlankString
+    kind: Literal["shape"] = "shape"
+    shape: Literal["rectangle", "circle"]
+    area: Area
+    color_token: NonBlankString
+    opacity: Opacity = 1.0
+    z_index: ZIndex = 0
+
+
+class MotifLayer(CamelModel):
+    """Aplicação fixa de um motivo pertencente ao vocabulário do Brand IR."""
+
+    id: NonBlankString
+    kind: Literal["motif"] = "motif"
+    motif: Literal["diagonal-lines"]
+    area: Area
+    color_token: NonBlankString
+    opacity: Opacity = 1.0
+    stroke_width_px: StrokeWidth
+    spacing_px: Annotated[float, Field(gt=0.0, le=256.0, allow_inf_nan=False)]
+    z_index: ZIndex = 0
+
+
+class AssetLayer(CamelModel):
+    """Asset imutável do Brand IR posicionado pelo layout."""
+
+    id: NonBlankString
+    kind: Literal["asset"] = "asset"
+    asset_token: NonBlankString
+    area: Area
+    fit: Literal["contain", "cover"] = "contain"
+    opacity: Opacity = 1.0
+    z_index: ZIndex = 0
+
+
+LockedLayer = Annotated[ShapeLayer | MotifLayer | AssetLayer, Field(discriminator="kind")]
 
 
 class Background(CamelModel):
@@ -123,6 +204,8 @@ class LayoutSpec(CamelModel):
     canvas: Canvas
     background: Background
     slots: list[Slot]
+    composition_mode: Literal["light", "dark"] | None = None
+    locked_layers: list[LockedLayer] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_geometry(self) -> LayoutSpec:
@@ -134,14 +217,16 @@ class LayoutSpec(CamelModel):
                 f"O canvas do perfil {self.profile} deve ser {expected[0]}×{expected[1]}px "
                 f"com área segura de {expected[2]}px."
             )
-        slot_ids = [slot.id for slot in self.slots]
-        if len(slot_ids) != len(set(slot_ids)):
-            raise ValueError("Os identificadores de slot precisam ser únicos no layout.")
+        layer_ids = [layer.id for layer in self.locked_layers]
+        element_ids = [*(slot.id for slot in self.slots), *layer_ids]
+        if len(element_ids) != len(set(element_ids)):
+            raise ValueError("Os identificadores de slot e camada precisam ser únicos no layout.")
         width, height = self.canvas.width_px, self.canvas.height_px
-        for slot in self.slots:
-            x, y, slot_width, slot_height = slot.area
-            if x + slot_width > width or y + slot_height > height:
-                raise ValueError(f"O slot «{slot.id}» ultrapassa os limites do canvas.")
+        for element in [*self.slots, *self.locked_layers]:
+            x, y, element_width, element_height = element.area
+            if x + element_width > width or y + element_height > height:
+                noun = "slot" if isinstance(element, Slot) else "camada"
+                raise ValueError(f"O {noun} «{element.id}» ultrapassa os limites do canvas.")
         if self.background.kind == "image-slot" and not any(
             slot.kind == "image" for slot in self.slots
         ):
@@ -154,6 +239,7 @@ class TextValue(CamelModel):
 
     kind: Literal["text"] = "text"
     text: str
+    emphasis: NonBlankString | None = None
 
 
 class ImageValue(CamelModel):

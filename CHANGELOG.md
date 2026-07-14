@@ -29,6 +29,11 @@ release pública.
   declaradas pelo manual e prévias permitidas de fontes ITF FFL carregadas
   diretamente do Fontshare, sem re-hospedar seus binários; nomes digitados usam
   a variante catalogada mais próxima quando o peso preferido não existe.
+- Brand IR 0.3 com gramática de composição explícita, aliases de logo para
+  fundos claros/escuros sem recoloração e dois layouts editoriais 4:5 gerados
+  somente quando o manual declara modos, proporção, limite de acento, padrão e
+  numeração; o editor expõe apenas conteúdo e o Guard protege contraste,
+  destaque, tamanho do símbolo e presença cromática.
 - Renderer autoritativo TypeScript (`packages/render`) concluído no Plano 2:
   - DOM 1:1 px e fitting determinístico, com pipeline estável compartilhado
     por prévia e exportação;
@@ -36,7 +41,7 @@ release pública.
     isolamento contra estilos do app;
   - validação de payload hostil, contenção de origem e relatório medido de
     overflow/fallback;
-  - gate Biome, tipagem estrita, 50 testes unitários e build Vite reproduzível.
+  - gate Biome, tipagem estrita, suíte unitária e build Vite reproduzível.
 - Export PNG/PDF pelo Chromium pinado, com publicação atômica, PDF
   determinístico, equivalência RGBA prévia×exportação e Brand Guard estático +
   medido antes de publicar qualquer arquivo.

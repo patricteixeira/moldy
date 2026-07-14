@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type JSX } from "react"
 import { useApi } from "../api/context"
 import { ApiError, contentAddressedPath } from "../api/client"
 import type { LayoutSpec, SlotValue } from "../api/types"
+import { exactOccurrenceCount } from "./emphasis"
 import { slotLabel } from "./labels"
 
 interface SlotFormProps {
@@ -98,8 +99,14 @@ export function SlotForm({
           const currentValue = values[slot.id]
           if (slot.kind === "text") {
             const text = currentValue?.kind === "text" ? currentValue.text : ""
+            const emphasis = currentValue?.kind === "text" ? (currentValue.emphasis ?? "") : ""
             const isOver = slot.maxChars !== null && slot.maxChars !== undefined && text.length > slot.maxChars
             const label = `${slotLabel(slot.id)}${slot.required ? "" : " (opcional)"}`
+            const allowsEmphasis = Boolean(slot.emphasisColorToken)
+            const emphasisHintId = `slot-emphasis-hint-${slot.id}`
+            const emphasisGuidanceId = `slot-emphasis-guidance-${slot.id}`
+            const emphasisIsAmbiguous =
+              emphasis.length > 0 && exactOccurrenceCount(text, emphasis) !== 1
 
             return (
               <div className="slot-field" key={slot.id}>
@@ -128,10 +135,52 @@ export function SlotForm({
                       slot.id,
                       event.currentTarget.value === ""
                         ? null
-                        : { kind: "text", text: event.currentTarget.value },
+                        : {
+                            kind: "text",
+                            text: event.currentTarget.value,
+                            ...(emphasis ? { emphasis } : {}),
+                          },
                     )
                   }
                 />
+                {allowsEmphasis ? (
+                  <div className="slot-emphasis-field">
+                    <label htmlFor={`slot-emphasis-input-${slot.id}`}>Trecho em destaque</label>
+                    <p id={emphasisHintId} className="field-hint">
+                      Copie exatamente uma parte da frase principal.
+                    </p>
+                    <input
+                      id={`slot-emphasis-input-${slot.id}`}
+                      name={`${slot.id}-emphasis`}
+                      data-testid={`slot-emphasis-input-${slot.id}`}
+                      type="text"
+                      autoComplete="off"
+                      aria-describedby={
+                        emphasisIsAmbiguous
+                          ? `${emphasisHintId} ${emphasisGuidanceId}`
+                          : emphasisHintId
+                      }
+                      aria-invalid={emphasisIsAmbiguous || undefined}
+                      aria-required="true"
+                      required
+                      disabled={disabled || text.length === 0}
+                      value={emphasis}
+                      onChange={(event) => {
+                        const nextEmphasis = event.currentTarget.value
+                        onChange(slot.id, {
+                          kind: "text",
+                          text,
+                          ...(nextEmphasis ? { emphasis: nextEmphasis } : {}),
+                        })
+                      }}
+                    />
+                    {emphasisIsAmbiguous ? (
+                      <p id={emphasisGuidanceId} className="field-guidance" aria-live="polite">
+                        Use um trecho que apareça exatamente uma vez na frase principal.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )
           }

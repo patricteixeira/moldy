@@ -4,7 +4,7 @@ from brand_runtime.intake.compile import compile_ir
 from brand_runtime.intake.draft import build_draft
 from brand_runtime.kit.generator import KitGenerationError, generate_kit
 from brand_runtime.kit.models import PROFILES
-from tests.test_compile import FIXED, _answers
+from tests.test_compile import FIXED, _answers, _composition_ir
 
 
 def _ir(brand_package):
@@ -159,3 +159,66 @@ def test_missing_ir_references_and_impossible_logo_fail_explicitly(brand_package
     ir.assets["logo.primary"].min_width_px = 1000
     with pytest.raises(KitGenerationError, match="não cabe"):
         generate_kit(ir)
+
+
+def test_explicit_composition_adds_two_editorial_4x5_layouts_after_canonical_ten(
+    brand_package,
+):
+    ir = _composition_ir(brand_package)
+    kit = generate_kit(ir)
+
+    assert len(kit) == 12
+    assert [layout.id for layout in kit[-2:]] == [
+        "editorial-light-post-4x5",
+        "editorial-dark-post-4x5",
+    ]
+    assert all(layout.profile == "post-4x5" for layout in kit[-2:])
+    assert [layout.composition_mode for layout in kit[-2:]] == ["light", "dark"]
+
+    for layout, logo_token in zip(kit[-2:], ("logo.onLight", "logo.onDark"), strict=True):
+        layers = {layer.id: layer for layer in layout.locked_layers}
+        slots = {slot.id: slot for slot in layout.slots}
+        assert list(layers) == [
+            "diagonal-field",
+            "frame-top",
+            "frame-left",
+            "frame-right",
+            "frame-bottom",
+            "accent-rule",
+            "brand-mark",
+        ]
+        assert layers["diagonal-field"].area == (0, 0, 1080, 1350)
+        assert layers["diagonal-field"].motif == "diagonal-lines"
+        assert layers["diagonal-field"].opacity == 0.06
+        assert layers["diagonal-field"].spacing_px == 22
+        assert layers["brand-mark"].asset_token == logo_token
+        assert layers["brand-mark"].area == (918, 116, 58, 58)
+        assert layers["accent-rule"].area == (104, 445, 56, 4)
+        assert set(slots) == {"index", "kicker", "headline", "signature"}
+        assert slots["index"].area == (80, 890, 760, 460)
+        assert slots["index"].fill_mode == "stroke"
+        assert slots["index"].text_format == "zero-padded"
+        assert slots["index"].opacity == 0.08
+        assert slots["headline"].area == (104, 525, 840, 360)
+        assert slots["headline"].emphasis_color_token == "color.secondary"
+        assert slots["headline"].text_transform == "uppercase"
+        assert slots["kicker"].color_token == slots["headline"].color_token
+        assert slots["kicker"].max_chars == 48
+        assert slots["kicker"].required is False
+        assert slots["kicker"].fit == "shrink-within-role-range"
+        assert slots["signature"].text_align == "center"
+
+
+def test_partial_composition_never_invents_editorial_layouts(brand_package):
+    ir = _ir(brand_package).model_copy(deep=True)
+    assert ir.composition_rules is None
+    assert len(generate_kit(ir)) == 10
+
+    composition_ir = _composition_ir(brand_package)
+    ir = composition_ir.model_copy(deep=True)
+    ir.composition_rules.color_ratios = []
+    assert len(generate_kit(ir)) == 10
+
+    ir = composition_ir.model_copy(deep=True)
+    ir.assets["logo.onLight"].min_width_px = 96
+    assert len(generate_kit(ir)) == 10

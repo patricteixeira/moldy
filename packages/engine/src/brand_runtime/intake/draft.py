@@ -29,6 +29,11 @@ from brand_runtime.intake.base import Candidate
 from brand_runtime.intake.dtcg import load_dtcg
 from brand_runtime.intake.fonts import introspect_font
 from brand_runtime.intake.pdf_colors import extract_pdf_colors, extract_pdf_declared_colors
+from brand_runtime.intake.pdf_composition import (
+    CompositionDeclarations,
+    extract_pdf_composition,
+    merge_composition_declarations,
+)
 from brand_runtime.intake.pdf_fonts import extract_pdf_declared_fonts, extract_pdf_fonts
 from brand_runtime.intake.raster_logo import extract_raster_colors
 from brand_runtime.intake.svg_logo import (
@@ -115,6 +120,7 @@ class BrandDraft(CamelModel):
     package_dir: str
     questions: list[DraftQuestion]
     diagnostics: list[Diagnostic]
+    composition_declarations: CompositionDeclarations | None = None
 
 
 def _question(
@@ -611,6 +617,9 @@ def build_draft(package_dir: Path) -> BrandDraft:
     png_logos = _dedupe_paths_by_hash(_files_with_suffixes(logos_dir, {".png"}))
     fonts_dir = package_dir / "fonts"
     font_files = _files_with_suffixes(fonts_dir, {".otf", ".ttf"})
+    composition_declarations = merge_composition_declarations(
+        [extract_pdf_composition(path) for path in pdfs]
+    )
 
     dtcg = _dtcg_candidates(package_dir)
     dtcg_colors = [c for key, c in dtcg.items() if key.startswith("color.")]
@@ -784,6 +793,9 @@ def build_draft(package_dir: Path) -> BrandDraft:
     return BrandDraft(
         package_dir=str(package_dir),
         questions=questions,
+        composition_declarations=(
+            composition_declarations if composition_declarations.has_rules() else None
+        ),
         diagnostics=_diagnostics(
             pdfs,
             logo_candidates,

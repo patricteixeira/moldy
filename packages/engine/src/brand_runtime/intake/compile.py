@@ -5,23 +5,34 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
-from brand_runtime.colors import normalize_color
+from brand_runtime.colors import lightness, normalize_color
 from brand_runtime.intake.base import Candidate
 from brand_runtime.intake.draft import BrandDraft, DraftQuestion
-from brand_runtime.intake.svg_logo import SvgInvalid, svg_external_style_missing
+from brand_runtime.intake.svg_logo import (
+    SvgInvalid,
+    extract_svg_colors,
+    svg_external_style_missing,
+)
 from brand_runtime.ir.models import (
+    AccentRule,
     BrandIR,
     BrandInfo,
     CamelModel,
     ColorToken,
+    ColorRatioRule,
+    CompositionMode,
+    CompositionModes,
+    CompositionRules,
     Diagnostic,
     Evidence,
     FontToken,
     LogoAsset,
+    MotifRule,
+    NumberingRule,
     RevisionInfo,
     SemanticRole,
 )
@@ -36,6 +47,10 @@ _REQUIRED_ANSWERS = (
 )
 _HASH_CHUNK_SIZE = 1024 * 1024
 _IDENTITY_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+# A revisão persiste IR e kit como um único bundle write-once. Mudanças
+# semânticas no gerador precisam trocar este domínio para não ressuscitar um
+# kit antigo sob o mesmo id depois de um upgrade.
+_REVISION_BUNDLE_DOMAIN = b"brand-ir-0.3-kit-v2\0"
 
 
 class Answers(CamelModel):
@@ -274,8 +289,14 @@ def _compile_font(
         raise CompileError(f"A fonte confirmada para {token_id} é inválida.") from exc
 
 
-def _compile_logo(draft: BrandDraft, value: Any, created_at: datetime) -> LogoAsset:
-    """Compila o logo primário com path portátil, formato e hash do arquivo real."""
+def _compile_logo(
+    draft: BrandDraft,
+    value: Any,
+    created_at: datetime,
+    *,
+    confirmed: bool = True,
+) -> LogoAsset:
+    """Compila um logo candidato com path portátil, formato e hash do arquivo real."""
     relative = _portable_relative_path(value)
     candidate = _match_logo(_question(draft, "logo.primary"), relative)
     if candidate is None:
@@ -292,11 +313,163 @@ def _compile_logo(draft: BrandDraft, value: Any, created_at: datetime) -> LogoAs
                 )
         except SvgInvalid as exc:
             raise CompileError("O logo confirmado não é um SVG válido e autocontido.") from exc
+    inherited_evidence = [
+        _portable_evidence(item, Path(draft.package_dir)) for item in candidate.evidence
+    ]
+    logo_geometry = (
+        draft.composition_declarations.logo_geometry
+        if draft.composition_declarations is not None
+        else None
+    )
+    min_width_px = 96
+    clear_space_ratio = 0.25
+    if logo_geometry is not None:
+        if logo_geometry.min_width_px is not None:
+            min_width_px = logo_geometry.min_width_px
+        if logo_geometry.clear_space_ratio is not None:
+            clear_space_ratio = logo_geometry.clear_space_ratio
+        inherited_evidence.extend(
+            _portable_evidence(item, Path(draft.package_dir))
+            for item in (
+                *logo_geometry.min_width_evidence,
+                *logo_geometry.clear_space_evidence,
+            )
+        )
+    if confirmed:
+        inherited_evidence.append(_confirmation(created_at))
     return LogoAsset(
         path=relative,
         sha256=_sha256(logo_path),
         format=suffix,
-        evidence=_confirmed_evidence(candidate, created_at, Path(draft.package_dir)),
+        evidence=inherited_evidence,
+        min_width_px=min_width_px,
+        clear_space_ratio=clear_space_ratio,
+    )
+
+
+def _logo_appearance(svg_path: Path) -> Literal["dark", "light"] | None:
+    """Classifica a tinta visível de um SVG sem alterar ou renderizar o arquivo."""
+    colors = extract_svg_colors(svg_path)
+    total = sum(candidate.score for candidate in colors)
+    if total <= 0:
+        return None
+    weighted_lightness = (
+        sum(lightness(candidate.value) * candidate.score for candidate in colors) / total
+    )
+    if weighted_lightness <= 40:
+        return "dark"
+    if weighted_lightness >= 60:
+        return "light"
+    return None
+
+
+def _logo_name_appearance(relative: str) -> Literal["dark", "light"] | None:
+    """Aceita apenas convenções de nome inequívocas como fallback à cor."""
+    stem = Path(relative).stem.casefold()
+    if any(marker in stem for marker in ("on-light", "on_light", "positivo", "positive")):
+        return "dark"
+    if any(marker in stem for marker in ("on-dark", "on_dark", "negativo", "negative")):
+        return "light"
+    return None
+
+
+def _compile_logo_variants(draft: BrandDraft, created_at: datetime) -> dict[str, LogoAsset]:
+    """Publica aliases de contraste apenas para um par claro/escuro inequívoco."""
+    question = _question(draft, "logo.primary")
+    if question is None:
+        return {}
+    by_appearance: dict[str, list[str]] = {"dark": [], "light": []}
+    for candidate in question.candidates:
+        if not isinstance(candidate.value, str):
+            continue
+        relative = _portable_relative_path(candidate.value)
+        if Path(relative).suffix.casefold() != ".svg":
+            continue
+        path = _package_file(Path(draft.package_dir), relative)
+        appearance = _logo_appearance(path) or _logo_name_appearance(relative)
+        if appearance is not None:
+            by_appearance[appearance].append(relative)
+    if len(by_appearance["dark"]) != 1 or len(by_appearance["light"]) != 1:
+        return {}
+    return {
+        "logo.onLight": _compile_logo(draft, by_appearance["dark"][0], created_at, confirmed=False),
+        "logo.onDark": _compile_logo(draft, by_appearance["light"][0], created_at, confirmed=False),
+    }
+
+
+def _portable_evidence_list(items: list[Evidence], package_dir: Path) -> list[Evidence]:
+    return [_portable_evidence(item, package_dir) for item in items]
+
+
+def _compile_composition_rules(
+    draft: BrandDraft,
+    colors: dict[str, ColorToken],
+    assets: dict[str, LogoAsset],
+) -> CompositionRules | None:
+    """Liga declarações explícitas a tokens sem completar lacunas por inferência."""
+    declarations = draft.composition_declarations
+    if declarations is None:
+        return None
+    package_dir = Path(draft.package_dir)
+    modes = CompositionModes()
+    if declarations.light_mode_evidence:
+        modes.light = CompositionMode(
+            background_color_token="color.background",
+            foreground_color_token="color.text",
+            logo_asset_token="logo.onLight" if "logo.onLight" in assets else None,
+            evidence=_portable_evidence_list(declarations.light_mode_evidence, package_dir),
+        )
+    if declarations.dark_mode_evidence:
+        modes.dark = CompositionMode(
+            background_color_token="color.primary",
+            foreground_color_token="color.background",
+            logo_asset_token="logo.onDark" if "logo.onDark" in assets else None,
+            evidence=_portable_evidence_list(declarations.dark_mode_evidence, package_dir),
+        )
+
+    role_tokens = {
+        "primary": "color.primary",
+        "background": "color.background",
+        "accent": "color.secondary",
+    }
+    ratios = [
+        ColorRatioRule(
+            color_token=role_tokens[item.role],
+            ratio=item.ratio,
+            evidence=_portable_evidence_list(item.evidence, package_dir),
+        )
+        for item in declarations.color_ratios
+        if role_tokens[item.role] in colors
+    ]
+    accent = None
+    if declarations.accent is not None and "color.secondary" in colors:
+        accent = AccentRule(
+            color_token="color.secondary",
+            max_ratio=declarations.accent.max_ratio,
+            evidence=_portable_evidence_list(declarations.accent.evidence, package_dir),
+        )
+    motifs = [
+        MotifRule(
+            kind=item.kind,
+            evidence=_portable_evidence_list(item.evidence, package_dir),
+        )
+        for item in declarations.motifs
+    ]
+    numbering = (
+        NumberingRule(
+            style="zero-padded",
+            min_digits=2,
+            evidence=_portable_evidence_list(declarations.numbering_evidence, package_dir),
+        )
+        if declarations.numbering_evidence
+        else None
+    )
+    return CompositionRules(
+        modes=modes,
+        color_ratios=ratios,
+        accent=accent,
+        motifs=motifs,
+        numbering=numbering,
     )
 
 
@@ -309,11 +482,22 @@ def _revision_id(ir: BrandIR) -> str:
         *(token.evidence for token in identity.fonts.values()),
         *(asset.evidence for asset in identity.assets.values()),
     ]
+    if identity.composition_rules is not None:
+        rules = identity.composition_rules
+        evidence_groups.extend(
+            mode.evidence for mode in (rules.modes.light, rules.modes.dark) if mode is not None
+        )
+        evidence_groups.extend(item.evidence for item in rules.color_ratios)
+        evidence_groups.extend(item.evidence for item in rules.motifs)
+        if rules.accent is not None:
+            evidence_groups.append(rules.accent.evidence)
+        if rules.numbering is not None:
+            evidence_groups.append(rules.numbering.evidence)
     for evidence in evidence_groups:
         for item in evidence:
             if item.confirmed_at is not None:
                 item.confirmed_at = _IDENTITY_EPOCH
-    payload = identity.model_dump_json(by_alias=True).encode("utf-8")
+    payload = _REVISION_BUNDLE_DOMAIN + identity.model_dump_json(by_alias=True).encode("utf-8")
     return f"brandrev_{hashlib.sha256(payload).hexdigest()[:12]}"
 
 
@@ -361,6 +545,16 @@ def compile_ir(
         )
         for token_id in ("font.heading", "font.body")
     }
+    assets = {
+        "logo.primary": _compile_logo(
+            draft,
+            answers.values["logo.primary"],
+            timestamp,
+        ),
+        **_compile_logo_variants(draft, timestamp),
+    }
+    composition_rules = _compile_composition_rules(draft, colors, assets)
+
     roles = {
         "heading": SemanticRole(
             font="font.heading",
@@ -384,20 +578,50 @@ def compile_ir(
             line_height=1.4,
         ),
     }
+    if composition_rules is not None:
+        accent_color = "color.secondary" if "color.secondary" in colors else "color.primary"
+        roles.update(
+            {
+                "display": SemanticRole(
+                    font="font.heading",
+                    color="color.primary",
+                    min_size_px=56,
+                    max_size_px=84,
+                    line_height=0.95,
+                ),
+                "label": SemanticRole(
+                    font="font.body",
+                    color="color.text",
+                    min_size_px=20,
+                    max_size_px=30,
+                    line_height=1.1,
+                ),
+                "index": SemanticRole(
+                    font="font.heading",
+                    color=accent_color,
+                    min_size_px=240,
+                    max_size_px=460,
+                    line_height=0.8,
+                ),
+                "signature": SemanticRole(
+                    font="font.body",
+                    color="color.text",
+                    min_size_px=14,
+                    max_size_px=18,
+                    line_height=1.2,
+                ),
+            }
+        )
 
     ir = BrandIR(
+        schema_version="0.3.0",
         brand=BrandInfo(name=brand_name),
         revision=RevisionInfo(id="", created_at=timestamp),
         colors=colors,
         fonts=fonts,
         roles=roles,
-        assets={
-            "logo.primary": _compile_logo(
-                draft,
-                answers.values["logo.primary"],
-                timestamp,
-            )
-        },
+        assets=assets,
+        composition_rules=composition_rules,
         diagnostics=diagnostics,
     )
     return ir.model_copy(

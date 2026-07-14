@@ -4,6 +4,7 @@ import type {
   Canvas,
   ContentSpec,
   LayoutSpec,
+  LockedLayer,
   Payload,
   Profile,
   Slot,
@@ -24,6 +25,11 @@ const DATA_PNG_PREFIX = "data:image/png;base64,";
 const PNG_SIGNATURE_BASE64 = "iVBORw0KGgo";
 const MAX_INLINE_PNG_BASE64_LENGTH = 16_384;
 const BASE_PATH_SEGMENT = /^[a-z\d._~-]+$/i;
+const MAX_Z_INDEX = 20;
+const MAX_STROKE_WIDTH_PX = 20;
+const MAX_LAYER_SPACING_PX = 256;
+const MIN_LETTER_SPACING_EM = -0.1;
+const MAX_LETTER_SPACING_EM = 0.5;
 
 function invalid(detail: string): never {
   throw new Error(`Payload inválido: ${detail}`);
@@ -65,6 +71,52 @@ function integer(value: unknown, field: string): number {
 function optionalPositiveInteger(value: unknown, field: string): void {
   if (value === undefined || value === null) return;
   if (integer(value, field) <= 0) invalid(`${field} deve ser maior que zero.`);
+}
+
+function boundedNumber(value: unknown, field: string, minimum: number, maximum: number): number {
+  const parsed = finiteNumber(value, field);
+  if (parsed < minimum || parsed > maximum) {
+    invalid(`${field} deve estar entre ${minimum} e ${maximum}.`);
+  }
+  return parsed;
+}
+
+function knownKey(value: unknown, field: string, source: object, kind: string): string {
+  const key = nonEmptyString(value, field);
+  if (!hasOwn(source, key)) invalid(`${field} referencia ${kind} desconhecido.`);
+  return key;
+}
+
+function onlyFields(
+  value: Record<string, unknown>,
+  allowed: readonly string[],
+  field: string,
+): void {
+  const allowedSet = new Set(allowed);
+  const extra = Object.keys(value).find((key) => !allowedSet.has(key));
+  if (extra) invalid(`${field}.${extra} não pertence ao contrato.`);
+}
+
+function validateArea(
+  raw: unknown,
+  field: string,
+  canvas: Canvas,
+): [number, number, number, number] {
+  if (!Array.isArray(raw) || raw.length !== 4) {
+    invalid(`${field} deve conter quatro inteiros.`);
+  }
+  const [x, y, width, height] = raw.map((value, item) => integer(value, `${field}[${item}]`));
+  if (
+    x < 0 ||
+    y < 0 ||
+    width <= 0 ||
+    height <= 0 ||
+    x + width > canvas.widthPx ||
+    y + height > canvas.heightPx
+  ) {
+    invalid(`${field} deve ser positiva e permanecer dentro do canvas.`);
+  }
+  return [x, y, width, height];
 }
 
 function isSmallSignedPngDataUri(path: string): boolean {
@@ -186,8 +238,135 @@ function validateAssetsBaseUrl(value: unknown): void {
   }
 }
 
+function validateCompositionRules(raw: unknown, colors: object, assets: object): void {
+  if (raw === undefined || raw === null) return;
+  const rules = record(raw, "brandIr.compositionRules");
+  onlyFields(
+    rules,
+    ["modes", "colorRatios", "accent", "motifs", "numbering"],
+    "brandIr.compositionRules",
+  );
+  const modes =
+    rules.modes === undefined
+      ? (Object.create(null) as Record<string, unknown>)
+      : record(rules.modes, "brandIr.compositionRules.modes");
+  if (rules.modes !== undefined) {
+    onlyFields(modes, ["light", "dark"], "brandIr.compositionRules.modes");
+  }
+  for (const name of ["light", "dark"] as const) {
+    const rawMode = modes[name];
+    if (rawMode === undefined || rawMode === null) continue;
+    const prefix = `brandIr.compositionRules.modes.${name}`;
+    const mode = record(rawMode, prefix);
+    onlyFields(
+      mode,
+      ["backgroundColorToken", "foregroundColorToken", "logoAssetToken", "evidence"],
+      prefix,
+    );
+    knownKey(
+      mode.backgroundColorToken,
+      `brandIr.compositionRules.modes.${name}.backgroundColorToken`,
+      colors,
+      "token de cor",
+    );
+    knownKey(
+      mode.foregroundColorToken,
+      `brandIr.compositionRules.modes.${name}.foregroundColorToken`,
+      colors,
+      "token de cor",
+    );
+    if (mode.logoAssetToken !== undefined && mode.logoAssetToken !== null) {
+      knownKey(
+        mode.logoAssetToken,
+        `brandIr.compositionRules.modes.${name}.logoAssetToken`,
+        assets,
+        "asset",
+      );
+    }
+  }
+
+  if (rules.colorRatios !== undefined && !Array.isArray(rules.colorRatios)) {
+    invalid("brandIr.compositionRules.colorRatios deve ser um array.");
+  }
+  const ratioTokens = new Set<string>();
+  const colorRatios = rules.colorRatios ?? [];
+  if (!Array.isArray(colorRatios)) invalid("brandIr.compositionRules.colorRatios é inválido.");
+  colorRatios.forEach((rawRatio, index) => {
+    const prefix = `brandIr.compositionRules.colorRatios[${index}]`;
+    const ratio = record(rawRatio, prefix);
+    onlyFields(ratio, ["colorToken", "ratio", "evidence"], prefix);
+    const token = knownKey(ratio.colorToken, `${prefix}.colorToken`, colors, "token de cor");
+    if (ratioTokens.has(token)) invalid(`${prefix}.colorToken está duplicado.`);
+    ratioTokens.add(token);
+    const value = finiteNumber(ratio.ratio, `${prefix}.ratio`);
+    if (value <= 0 || value > 1) invalid(`${prefix}.ratio deve respeitar 0 < ratio <= 1.`);
+  });
+
+  if (rules.accent !== undefined && rules.accent !== null) {
+    const accent = record(rules.accent, "brandIr.compositionRules.accent");
+    onlyFields(accent, ["colorToken", "maxRatio", "evidence"], "brandIr.compositionRules.accent");
+    knownKey(
+      accent.colorToken,
+      "brandIr.compositionRules.accent.colorToken",
+      colors,
+      "token de cor",
+    );
+    const maxRatio = finiteNumber(accent.maxRatio, "brandIr.compositionRules.accent.maxRatio");
+    if (maxRatio <= 0 || maxRatio > 1) {
+      invalid("brandIr.compositionRules.accent.maxRatio deve respeitar 0 < maxRatio <= 1.");
+    }
+  }
+
+  if (rules.motifs !== undefined && !Array.isArray(rules.motifs)) {
+    invalid("brandIr.compositionRules.motifs deve ser um array.");
+  }
+  let hasDiagonalLines = false;
+  const motifs = rules.motifs ?? [];
+  if (!Array.isArray(motifs)) invalid("brandIr.compositionRules.motifs é inválido.");
+  motifs.forEach((rawMotif, index) => {
+    const prefix = `brandIr.compositionRules.motifs[${index}]`;
+    const motif = record(rawMotif, prefix);
+    onlyFields(motif, ["kind", "evidence"], prefix);
+    if (motif.kind !== "diagonal-lines") {
+      invalid(`brandIr.compositionRules.motifs[${index}].kind é inválido.`);
+    }
+    if (hasDiagonalLines) invalid("brandIr.compositionRules.motifs contém kind duplicado.");
+    hasDiagonalLines = true;
+  });
+
+  if (rules.numbering !== undefined && rules.numbering !== null) {
+    const numbering = record(rules.numbering, "brandIr.compositionRules.numbering");
+    onlyFields(numbering, ["style", "minDigits", "evidence"], "brandIr.compositionRules.numbering");
+    if (numbering.style !== "zero-padded") {
+      invalid("brandIr.compositionRules.numbering.style é inválido.");
+    }
+    if (numbering.minDigits !== undefined) {
+      const minDigits = integer(
+        numbering.minDigits,
+        "brandIr.compositionRules.numbering.minDigits",
+      );
+      if (minDigits < 2 || minDigits > 8) {
+        invalid("brandIr.compositionRules.numbering.minDigits deve estar entre 2 e 8.");
+      }
+    }
+  }
+}
+
 function validateBrandIr(raw: unknown): BrandIr {
   const ir = record(raw, "brandIr");
+  if (
+    ir.schemaVersion !== undefined &&
+    ir.schemaVersion !== "0.1.0" &&
+    ir.schemaVersion !== "0.2.0" &&
+    ir.schemaVersion !== "0.3.0"
+  ) {
+    invalid("brandIr.schemaVersion é inválida.");
+  }
+  if (ir.compositionRules !== undefined && ir.compositionRules !== null) {
+    if (ir.schemaVersion !== "0.3.0") {
+      invalid("brandIr.compositionRules exige schemaVersion 0.3.0 explícita.");
+    }
+  }
   const revision = record(ir.revision, "brandIr.revision");
   nonEmptyString(revision.id, "brandIr.revision.id");
 
@@ -262,6 +441,7 @@ function validateBrandIr(raw: unknown): BrandIr {
   const logo = assets["logo.primary"];
   if (!isRecord(logo)) invalid("brandIr.assets.logo.primary está ausente.");
   safePath(logo.path, "brandIr.assets.logo.primary.path");
+  validateCompositionRules(ir.compositionRules, colors, assets);
 
   return raw as BrandIr;
 }
@@ -280,9 +460,113 @@ function validateBackground(raw: unknown, colors: BrandIr["colors"]): Background
   return raw as Background;
 }
 
+function validateLockedLayer(
+  raw: unknown,
+  index: number,
+  canvas: Canvas,
+  ir: BrandIr,
+): LockedLayer {
+  const prefix = `layoutSpec.lockedLayers[${index}]`;
+  const layer = record(raw, prefix);
+  nonEmptyString(layer.id, `${prefix}.id`);
+  validateArea(layer.area, `${prefix}.area`, canvas);
+  if (layer.zIndex !== undefined) {
+    const zIndex = integer(layer.zIndex, `${prefix}.zIndex`);
+    if (zIndex < 0 || zIndex > MAX_Z_INDEX) {
+      invalid(`${prefix}.zIndex deve estar entre 0 e ${MAX_Z_INDEX}.`);
+    }
+  }
+
+  if (layer.kind === "shape") {
+    onlyFields(layer, ["id", "kind", "shape", "area", "colorToken", "opacity", "zIndex"], prefix);
+    if (layer.shape !== "rectangle" && layer.shape !== "circle") {
+      invalid(`${prefix}.shape é inválido.`);
+    }
+    knownKey(layer.colorToken, `${prefix}.colorToken`, ir.colors, "token de cor");
+    if (layer.opacity !== undefined) {
+      boundedNumber(layer.opacity, `${prefix}.opacity`, 0, 1);
+    }
+    return raw as LockedLayer;
+  }
+
+  if (layer.kind === "motif") {
+    onlyFields(
+      layer,
+      [
+        "id",
+        "kind",
+        "motif",
+        "area",
+        "colorToken",
+        "opacity",
+        "strokeWidthPx",
+        "spacingPx",
+        "zIndex",
+      ],
+      prefix,
+    );
+    if (layer.motif !== "diagonal-lines") invalid(`${prefix}.motif é inválido.`);
+    if (!ir.compositionRules?.motifs?.some((motif) => motif.kind === layer.motif)) {
+      invalid(`${prefix}.motif não está permitido em brandIr.compositionRules.motifs.`);
+    }
+    knownKey(layer.colorToken, `${prefix}.colorToken`, ir.colors, "token de cor");
+    if (layer.opacity !== undefined) {
+      boundedNumber(layer.opacity, `${prefix}.opacity`, 0, 1);
+    }
+    boundedNumber(
+      layer.strokeWidthPx,
+      `${prefix}.strokeWidthPx`,
+      Number.EPSILON,
+      MAX_STROKE_WIDTH_PX,
+    );
+    boundedNumber(layer.spacingPx, `${prefix}.spacingPx`, Number.EPSILON, MAX_LAYER_SPACING_PX);
+    return raw as LockedLayer;
+  }
+
+  if (layer.kind === "asset") {
+    onlyFields(layer, ["id", "kind", "assetToken", "area", "fit", "opacity", "zIndex"], prefix);
+    knownKey(layer.assetToken, `${prefix}.assetToken`, ir.assets, "asset");
+    if (layer.fit !== undefined && layer.fit !== "contain" && layer.fit !== "cover") {
+      invalid(`${prefix}.fit é inválido.`);
+    }
+    if (layer.opacity !== undefined) {
+      boundedNumber(layer.opacity, `${prefix}.opacity`, 0, 1);
+    }
+    return raw as LockedLayer;
+  }
+
+  invalid(`${prefix}.kind é inválido.`);
+}
+
 function validateSlot(raw: unknown, index: number, canvas: Canvas, ir: BrandIr): Slot {
   const prefix = `layoutSpec.slots[${index}]`;
   const slot = record(raw, prefix);
+  onlyFields(
+    slot,
+    [
+      "id",
+      "kind",
+      "role",
+      "colorToken",
+      "maxChars",
+      "minResolution",
+      "area",
+      "fit",
+      "required",
+      "zIndex",
+      "opacity",
+      "textAlign",
+      "textTransform",
+      "letterSpacingEm",
+      "fillMode",
+      "strokeColorToken",
+      "strokeWidthPx",
+      "assetToken",
+      "emphasisColorToken",
+      "textFormat",
+    ],
+    prefix,
+  );
   nonEmptyString(slot.id, `${prefix}.id`);
   if (slot.kind !== "text" && slot.kind !== "image" && slot.kind !== "logo") {
     invalid(`${prefix}.kind é inválido.`);
@@ -291,22 +575,7 @@ function validateSlot(raw: unknown, index: number, canvas: Canvas, ir: BrandIr):
     invalid(`${prefix}.fit é inválido.`);
   }
   if (typeof slot.required !== "boolean") invalid(`${prefix}.required deve ser booleano.`);
-  if (!Array.isArray(slot.area) || slot.area.length !== 4) {
-    invalid(`${prefix}.area deve conter quatro inteiros.`);
-  }
-  const [x, y, width, height] = slot.area.map((value, item) =>
-    integer(value, `${prefix}.area[${item}]`),
-  );
-  if (
-    x < 0 ||
-    y < 0 ||
-    width <= 0 ||
-    height <= 0 ||
-    x + width > canvas.widthPx ||
-    y + height > canvas.heightPx
-  ) {
-    invalid(`${prefix}.area deve ser positiva e permanecer dentro do canvas.`);
-  }
+  validateArea(slot.area, `${prefix}.area`, canvas);
 
   if (slot.kind === "text") {
     const role = nonEmptyString(slot.role, `${prefix}.role`);
@@ -325,6 +594,113 @@ function validateSlot(raw: unknown, index: number, canvas: Canvas, ir: BrandIr):
         invalid(`${prefix}.minResolution deve conter dois inteiros positivos.`);
       }
     });
+  }
+
+  if (slot.colorToken !== undefined && slot.colorToken !== null) {
+    knownKey(slot.colorToken, `${prefix}.colorToken`, ir.colors, "token de cor");
+  }
+  if (slot.zIndex !== undefined && slot.zIndex !== null) {
+    const zIndex = integer(slot.zIndex, `${prefix}.zIndex`);
+    if (zIndex < 0 || zIndex > MAX_Z_INDEX) {
+      invalid(`${prefix}.zIndex deve estar entre 0 e ${MAX_Z_INDEX}.`);
+    }
+  }
+  if (slot.opacity !== undefined && slot.opacity !== null) {
+    boundedNumber(slot.opacity, `${prefix}.opacity`, 0, 1);
+  }
+  if (
+    slot.textAlign !== undefined &&
+    slot.textAlign !== null &&
+    slot.textAlign !== "left" &&
+    slot.textAlign !== "center" &&
+    slot.textAlign !== "right"
+  ) {
+    invalid(`${prefix}.textAlign é inválido.`);
+  }
+  if (
+    slot.textTransform !== undefined &&
+    slot.textTransform !== null &&
+    slot.textTransform !== "none" &&
+    slot.textTransform !== "uppercase"
+  ) {
+    invalid(`${prefix}.textTransform é inválido.`);
+  }
+  if (slot.letterSpacingEm !== undefined && slot.letterSpacingEm !== null) {
+    boundedNumber(
+      slot.letterSpacingEm,
+      `${prefix}.letterSpacingEm`,
+      MIN_LETTER_SPACING_EM,
+      MAX_LETTER_SPACING_EM,
+    );
+  }
+  if (
+    slot.fillMode !== undefined &&
+    slot.fillMode !== null &&
+    slot.fillMode !== "fill" &&
+    slot.fillMode !== "stroke"
+  ) {
+    invalid(`${prefix}.fillMode é inválido.`);
+  }
+  if (slot.strokeColorToken !== undefined && slot.strokeColorToken !== null) {
+    knownKey(slot.strokeColorToken, `${prefix}.strokeColorToken`, ir.colors, "token de cor");
+  }
+  if (slot.strokeWidthPx !== undefined && slot.strokeWidthPx !== null) {
+    boundedNumber(
+      slot.strokeWidthPx,
+      `${prefix}.strokeWidthPx`,
+      Number.EPSILON,
+      MAX_STROKE_WIDTH_PX,
+    );
+  }
+  if (slot.assetToken !== undefined && slot.assetToken !== null) {
+    knownKey(slot.assetToken, `${prefix}.assetToken`, ir.assets, "asset");
+  }
+  if (slot.emphasisColorToken !== undefined && slot.emphasisColorToken !== null) {
+    knownKey(slot.emphasisColorToken, `${prefix}.emphasisColorToken`, ir.colors, "token de cor");
+  }
+  if (
+    slot.textFormat !== undefined &&
+    slot.textFormat !== null &&
+    slot.textFormat !== "plain" &&
+    slot.textFormat !== "zero-padded"
+  ) {
+    invalid(`${prefix}.textFormat é inválido.`);
+  }
+
+  const hasTextPresentation =
+    (slot.colorToken !== undefined && slot.colorToken !== null) ||
+    (slot.emphasisColorToken !== undefined && slot.emphasisColorToken !== null) ||
+    (slot.textFormat !== undefined && slot.textFormat !== null && slot.textFormat !== "plain") ||
+    (slot.textAlign !== undefined && slot.textAlign !== null && slot.textAlign !== "left") ||
+    (slot.textTransform !== undefined &&
+      slot.textTransform !== null &&
+      slot.textTransform !== "none") ||
+    (slot.letterSpacingEm !== undefined &&
+      slot.letterSpacingEm !== null &&
+      slot.letterSpacingEm !== 0) ||
+    (slot.fillMode !== undefined && slot.fillMode !== null && slot.fillMode !== "fill") ||
+    (slot.strokeColorToken !== undefined && slot.strokeColorToken !== null) ||
+    (slot.strokeWidthPx !== undefined && slot.strokeWidthPx !== null);
+  if (slot.kind !== "text" && hasTextPresentation) {
+    invalid(`${prefix} usa propriedades tipográficas em um slot ${slot.kind}.`);
+  }
+  if (slot.kind !== "logo" && slot.assetToken !== undefined && slot.assetToken !== null) {
+    invalid(`${prefix}.assetToken só é permitido em slot logo.`);
+  }
+  if (
+    slot.kind === "text" &&
+    slot.fillMode === "stroke" &&
+    (!slot.strokeColorToken || slot.strokeWidthPx === undefined || slot.strokeWidthPx === null)
+  ) {
+    invalid(`${prefix} com fillMode stroke exige strokeColorToken e strokeWidthPx.`);
+  }
+  if (
+    slot.kind === "text" &&
+    slot.fillMode !== "stroke" &&
+    ((slot.strokeColorToken !== undefined && slot.strokeColorToken !== null) ||
+      (slot.strokeWidthPx !== undefined && slot.strokeWidthPx !== null))
+  ) {
+    invalid(`${prefix} só pode definir strokeColorToken/strokeWidthPx com fillMode stroke.`);
   }
   return raw as Slot;
 }
@@ -346,15 +722,67 @@ function validateLayout(raw: unknown, ir: BrandIr): LayoutSpec {
     }
   }
   const background = validateBackground(layout.background, ir.colors);
+  if (
+    layout.compositionMode !== undefined &&
+    layout.compositionMode !== null &&
+    layout.compositionMode !== "light" &&
+    layout.compositionMode !== "dark"
+  ) {
+    invalid("layoutSpec.compositionMode é inválido.");
+  }
+  const compositionMode =
+    layout.compositionMode === "light" || layout.compositionMode === "dark"
+      ? ir.compositionRules?.modes?.[layout.compositionMode]
+      : null;
+  if (
+    (layout.compositionMode === "light" || layout.compositionMode === "dark") &&
+    !compositionMode
+  ) {
+    invalid(`layoutSpec.compositionMode não está definido em brandIr.compositionRules.modes.`);
+  }
+  if (
+    compositionMode &&
+    (background.kind !== "color" || background.colorToken !== compositionMode.backgroundColorToken)
+  ) {
+    invalid(
+      "layoutSpec.background.colorToken deve coincidir com o backgroundColorToken do compositionMode.",
+    );
+  }
+
+  if (
+    layout.lockedLayers !== undefined &&
+    layout.lockedLayers !== null &&
+    !Array.isArray(layout.lockedLayers)
+  ) {
+    invalid("layoutSpec.lockedLayers deve ser um array.");
+  }
+  const lockedLayers = Array.isArray(layout.lockedLayers)
+    ? layout.lockedLayers.map((layer, index) => validateLockedLayer(layer, index, expected, ir))
+    : [];
+
   if (!Array.isArray(layout.slots)) invalid("layoutSpec.slots deve ser um array.");
   const ids = new Set<string>();
-  layout.slots.forEach((rawSlot, index) => {
+  const slots = layout.slots.map((rawSlot, index) => {
     const slot = validateSlot(rawSlot, index, expected, ir);
     if (ids.has(slot.id)) invalid(`layoutSpec.slots contém id duplicado: ${slot.id}.`);
     ids.add(slot.id);
+    return slot;
   });
-  if (background.kind === "image-slot" && !layout.slots.some((slot) => slot.kind === "image")) {
+  for (const layer of lockedLayers) {
+    if (ids.has(layer.id)) {
+      invalid(`layoutSpec contém id duplicado entre slots/camadas: ${layer.id}.`);
+    }
+    ids.add(layer.id);
+  }
+  if (background.kind === "image-slot" && !slots.some((slot) => slot.kind === "image")) {
     invalid("layoutSpec.background image-slot exige ao menos um slot image.");
+  }
+  for (const [index, slot] of slots.entries()) {
+    if (slot.kind !== "logo") continue;
+    const assetToken = slot.assetToken ?? compositionMode?.logoAssetToken ?? "logo.primary";
+    if (!hasOwn(ir.assets, assetToken)) {
+      invalid(`layoutSpec.slots[${index}] não consegue resolver o asset de logo ${assetToken}.`);
+    }
   }
   return raw as LayoutSpec;
 }
@@ -362,10 +790,16 @@ function validateLayout(raw: unknown, ir: BrandIr): LayoutSpec {
 function validateSlotValue(raw: unknown, field: string): SlotValue {
   const value = record(raw, field);
   if (value.kind === "text") {
+    onlyFields(value, ["kind", "text", "emphasis"], field);
     if (typeof value.text !== "string") invalid(`${field}.text deve ser uma string.`);
+    if (value.emphasis !== undefined && value.emphasis !== null) {
+      nonEmptyString(value.emphasis, `${field}.emphasis`);
+    }
     return raw as SlotValue;
   }
   if (value.kind === "image") {
+    if (hasOwn(value, "emphasis")) invalid(`${field}.emphasis só é permitido em texto.`);
+    onlyFields(value, ["kind", "path", "sha256"], field);
     safePath(value.path, `${field}.path`, true);
     if (
       value.sha256 !== undefined &&
@@ -394,6 +828,11 @@ function validateContent(raw: unknown, layout: LayoutSpec, ir: BrandIr): Content
     const value = validateSlotValue(values[id], `contentSpec.values.${id}`);
     if (slot.kind === "logo" || value.kind !== slot.kind) {
       invalid(`contentSpec.values.${id}.kind é incompatível com o slot ${slot.kind}.`);
+    }
+    if (value.kind === "text" && value.emphasis !== undefined && value.emphasis !== null) {
+      if (!slot.emphasisColorToken) {
+        invalid(`contentSpec.values.${id}.emphasis exige emphasisColorToken no slot.`);
+      }
     }
   }
   return raw as ContentSpec;
