@@ -32,7 +32,9 @@ class PptxParseError(OoxmlError):
 
 
 @dataclass(frozen=True, slots=True)
-class _Identity:
+class ShapeIdentity:
+    """Identidade semântica recuperada dos sinais nativos do shape."""
+
     role: str
     slot_id: str | None
     revision_id: str | None
@@ -51,12 +53,13 @@ def _description_fields(shape) -> dict[str, str]:
     return fields
 
 
-def _identity(shape) -> _Identity | None:
+def identify_shape(shape) -> ShapeIdentity | None:
+    """Recupera a identidade estável usada pelo parser e pelo fixer."""
     fields = _description_fields(shape)
     if shape.name.startswith("br:"):
         parts = shape.name.split(":", 2)
         if len(parts) == 3 and parts[1]:
-            return _Identity(
+            return ShapeIdentity(
                 parts[1],
                 parts[2] or fields.get("slot"),
                 fields.get("brand-revision"),
@@ -64,7 +67,7 @@ def _identity(shape) -> _Identity | None:
             )
 
     if fields.get("brand-role"):
-        return _Identity(
+        return ShapeIdentity(
             fields["brand-role"],
             fields.get("slot"),
             fields.get("brand-revision"),
@@ -74,9 +77,9 @@ def _identity(shape) -> _Identity | None:
     if shape.is_placeholder:
         placeholder_type = shape.placeholder_format.type
         if placeholder_type in _TITLE_TYPES:
-            return _Identity("heading", None, None, "placeholder")
+            return ShapeIdentity("heading", None, None, "placeholder")
         if placeholder_type in _BODY_TYPES:
-            return _Identity("body", None, None, "placeholder")
+            return ShapeIdentity("body", None, None, "placeholder")
     return None
 
 
@@ -96,7 +99,7 @@ def parse_pptx_document_graph(path: Path) -> DocumentGraph:
     for slide_index, slide in enumerate(presentation.slides, start=1):
         theme_colors, theme_fonts = _theme_style(slide)
         for shape in slide.shapes:
-            identity = _identity(shape)
+            identity = identify_shape(shape)
             if identity is None:
                 continue
             run = _first_text_run(shape)

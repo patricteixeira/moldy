@@ -62,6 +62,9 @@ release pública.
 - Linter inicial de round-trip com baseline do artefato exportado, autoridade
   opcional do Brand IR, severidades, resumo para API/web e valores esperados e
   atuais suficientes para construir correções auditáveis.
+- Fix Plan e fixer PPTX conservador com verificação de SHA-256, deduplicação por
+  propriedade, aplicação atômica apenas em cópia e relint completo do resultado;
+  texto e findings estruturais nunca são corrigidos silenciosamente.
 - Padrões de engenharia (`ENGINEERING.md`), ADRs iniciais, CI e licenças
   (AGPL-3.0 para o app, MIT para os schemas).
 
@@ -94,3 +97,6 @@ release pública.
   com heading, body e logo recuperados, zero diagnóstico e SHA-256 conferido.
 - O linter da mesma fixture distinguiu duas edições de conteúdo de duas mudanças
   visuais corrigíveis, sem acusar quebra estrutural inexistente.
+- O fixer da fixture real restaurou a cor do heading e a geometria do logo em uma
+  nova cópia, preservou os dois textos editados e reduziu o relint a dois itens
+  informativos, com zero warning, error, locked ou fixable.

@@ -18,7 +18,11 @@ from brand_runtime.native import (
 )
 from brand_runtime.roundtrip import (
     DocumentGraph,
+    FixPlan,
+    FixResult,
     RoundtripReport,
+    apply_pptx_fix_plan,
+    build_fix_plan,
     lint_roundtrip,
     parse_pptx_document_graph,
 )
@@ -32,12 +36,16 @@ __all__ = [
     "CompileError",
     "ContentSpec",
     "DocumentGraph",
+    "FixPlan",
+    "FixResult",
     "GuardCheck",
     "GuardVerdict",
     "KitGenerationError",
     "LayoutSpec",
     "RoundtripReport",
+    "apply_pptx_fix_plan",
     "build_draft",
+    "build_fix_plan",
     "canonical_ooxml_manifest",
     "compile_ir",
     "derive_branded_template",

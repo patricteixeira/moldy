@@ -1,3 +1,4 @@
+from brand_runtime.roundtrip.fix import build_fix_plan
 from brand_runtime.roundtrip.lint import lint_roundtrip
 from brand_runtime.roundtrip.models import (
     BoundsPt,
@@ -69,3 +70,28 @@ def test_roundtrip_lint_blocks_removed_node_and_revision_switch():
     assert report.summary.status == "blocked"
     assert report.summary.locked == 2
     assert report.summary.warning == 1
+
+
+def test_fix_plan_deduplicates_properties_and_defers_text():
+    heading = _node("headline", "heading", 2)
+    baseline = _graph("a", [heading])
+    edited = _graph(
+        "b",
+        [
+            heading.model_copy(
+                update={
+                    "text": "Texto aprovado pela pessoa",
+                    "color": "#E57900",
+                    "bounds_pt": BoundsPt(x=12, y=20, width=100, height=50),
+                }
+            )
+        ],
+    )
+    report = lint_roundtrip(baseline, edited)
+
+    plan = build_fix_plan(edited, report)
+
+    assert [operation.property for operation in plan.operations] == ["boundsPt", "color"]
+    assert plan.operations[0].expected == heading.bounds_pt
+    assert plan.operations[1].expected == "#111111"
+    assert plan.deferred_finding_codes == ["text-changed"]

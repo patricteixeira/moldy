@@ -159,6 +159,8 @@ def test_schemas_exports_all_published_contracts(tmp_path):
         "guard-verdict.schema.json",
         "document-graph.schema.json",
         "roundtrip-report.schema.json",
+        "fix-plan.schema.json",
+        "fix-result.schema.json",
     }
     assert {path.name for path in out_dir.glob("*.json")} == schema_names
     assert (out_dir / "LICENSE").read_bytes() == license_bytes
@@ -204,7 +206,17 @@ def test_extract_rejects_missing_package_and_help_lists_commands(tmp_path):
 
     help_result = runner.invoke(app, ["--help"])
     assert help_result.exit_code == 0
-    for command in ("extract", "compile", "kit", "guard", "schemas"):
+    for command in (
+        "extract",
+        "compile",
+        "kit",
+        "guard",
+        "schemas",
+        "roundtrip-parse",
+        "roundtrip-lint",
+        "roundtrip-plan",
+        "roundtrip-fix",
+    ):
         assert command in help_result.stdout
 
 
@@ -217,6 +229,10 @@ def test_master_api_is_exported_from_package_root():
         "GuardCheck",
         "GuardVerdict",
         "export_schemas",
+        "FixPlan",
+        "FixResult",
+        "build_fix_plan",
+        "apply_pptx_fix_plan",
     ):
         assert name in brand_runtime.__all__
         assert callable(getattr(brand_runtime, name)) or name in {"GuardCheck", "GuardVerdict"}

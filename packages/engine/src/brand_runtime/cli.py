@@ -28,9 +28,15 @@ from brand_runtime.native.ooxml import OoxmlError, canonical_ooxml_manifest, val
 from brand_runtime.native.pptx import inspect_semantic_shapes, render_pptx
 from brand_runtime.native.preview import render_native_preview
 from brand_runtime.native.theme import derive_branded_template
-from brand_runtime.roundtrip.pptx import PptxParseError, parse_pptx_document_graph
-from brand_runtime.roundtrip.lint import lint_roundtrip
+from brand_runtime.roundtrip.fix import (
+    FixPlan,
+    RoundtripFixError,
+    apply_pptx_fix_plan,
+    build_fix_plan,
+)
+from brand_runtime.roundtrip.lint import RoundtripReport, lint_roundtrip
 from brand_runtime.roundtrip.models import DocumentGraph
+from brand_runtime.roundtrip.pptx import PptxParseError, parse_pptx_document_graph
 
 app = typer.Typer(
     add_completion=False,
@@ -62,6 +68,7 @@ _EXPECTED_ERRORS = (
     ValueError,
     OoxmlError,
     PptxParseError,
+    RoundtripFixError,
 )
 
 
@@ -104,6 +111,57 @@ def roundtrip_lint_command(
         typer.echo(payload, nl=False)
         return
     atomic_write_text(out, payload)
+    typer.echo(str(out))
+
+
+@app.command("roundtrip-plan")
+def roundtrip_plan_command(
+    edited: Path = typer.Argument(..., help="Document Graph do arquivo editado."),
+    report: Path = typer.Argument(..., help="Relatório produzido por roundtrip-lint."),
+    out: Path | None = typer.Option(None, "--out", help="JSON do plano de correção."),
+) -> None:
+    """Transforma findings corrigíveis em um plano versionado e deduplicado."""
+    try:
+        plan = build_fix_plan(
+            _read_model(edited, DocumentGraph),
+            _read_model(report, RoundtripReport),
+        )
+    except _EXPECTED_ERRORS as error:
+        _fail(error)
+    payload = _model_json(plan)
+    if out is None:
+        typer.echo(payload, nl=False)
+        return
+    atomic_write_text(out, payload)
+    typer.echo(str(out))
+
+
+@app.command("roundtrip-fix")
+def roundtrip_fix_command(
+    source: Path = typer.Argument(..., help="PPTX editado que originou o plano."),
+    baseline: Path = typer.Argument(..., help="Document Graph do arquivo original."),
+    plan: Path = typer.Argument(..., help="FixPlan produzido por roundtrip-plan."),
+    out: Path = typer.Option(..., "--out", help="Nova cópia PPTX corrigida."),
+    brand_ir: Path | None = typer.Option(None, "--brand-ir", help="Brand IR autoritativo."),
+    result_out: Path | None = typer.Option(
+        None,
+        "--result-out",
+        help="JSON com hashes, operações aplicadas e relint.",
+    ),
+) -> None:
+    """Aplica o plano em uma cópia PPTX e executa o relint do novo artefato."""
+    try:
+        result = apply_pptx_fix_plan(
+            source,
+            out,
+            _read_model(plan, FixPlan),
+            _read_model(baseline, DocumentGraph),
+            _read_model(brand_ir, BrandIR) if brand_ir is not None else None,
+        )
+        if result_out is not None:
+            atomic_write_text(result_out, _model_json(result))
+    except _EXPECTED_ERRORS as error:
+        _fail(error)
     typer.echo(str(out))
 
 
@@ -267,7 +325,7 @@ def schemas_command(
         if out_dir.exists() and not out_dir.is_dir():
             raise CliInputError(f"O destino «{out_dir}» não é um diretório.")
         paths = export_schemas(out_dir)
-        if len(paths) != 6:
+        if len(paths) != 8:
             raise CliInputError("A publicação de schemas não produziu os contratos esperados.")
     except _EXPECTED_ERRORS as error:
         _fail(error)

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "0.1.0",
+  "sourceSha256": "4e1f4a60f061dc47555e7a20b802cff665e2641abb99019ae57d0efeb0bc0225",
+  "fixedSha256": "51eab347ddb429883dd2ed490df3c60f35d8cfeb734ff1fe58495fff87e17b98",
+  "outputFilename": "proof-google-slides-corrected.pptx",
+  "appliedOperationIds": [
+    "op-001",
+    "op-002"
+  ],
+  "report": {
+    "schemaVersion": "0.1.0",
+    "baselineSha256": "645da1f180b1d1c45a25b8cae50f698fd85ce5297e2281fb12b469d4ba8eed8b",
+    "editedSha256": "51eab347ddb429883dd2ed490df3c60f35d8cfeb734ff1fe58495fff87e17b98",
+    "summary": {
+      "status": "review",
+      "total": 2,
+      "info": 2,
+      "warning": 0,
+      "error": 0,
+      "locked": 0,
+      "fixable": 0
+    },
+    "findings": [
+      {
+        "code": "text-changed",
+        "severity": "info",
+        "messagePt": "A edição externa alterou texto.",
+        "nodeId": "slide-1/shape-84",
+        "slotId": "headline",
+        "expected": "A marca continua editável",
+        "actual": "Continua sim",
+        "fixable": false
+      },
+      {
+        "code": "text-changed",
+        "severity": "info",
+        "messagePt": "A edição externa alterou texto.",
+        "nodeId": "slide-1/shape-85",
+        "slotId": "body",
+        "expected": "Altere este título, a fonte e a cor. Depois salve como proof-powerpoint-edited.pptx.",
+        "actual": "acabei de alterar o item e a cor da fonte",
+        "fixable": false
+      }
+    ]
+  }
+}

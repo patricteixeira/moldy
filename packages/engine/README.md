@@ -96,6 +96,11 @@ alterado:
 brandrt roundtrip-parse apresentacao-editada.pptx --out document-graph.json
 brandrt roundtrip-lint baseline-graph.json document-graph.json \
   --brand-ir ir.json --out roundtrip-report.json
+brandrt roundtrip-plan document-graph.json roundtrip-report.json \
+  --out fix-plan.json
+brandrt roundtrip-fix apresentacao-editada.pptx baseline-graph.json fix-plan.json \
+  --brand-ir ir.json --out apresentacao-corrigida.pptx \
+  --result-out fix-result.json
 ```
 
 O grafo registra identidade SHA-256, roles, slots, revisão de marca, texto,
@@ -103,6 +108,9 @@ tipografia, cor e bounds. A origem semântica também é preservada (`name`,
 `description` ou `placeholder`) para o futuro linter avaliar cada vínculo.
 O relatório separa alterações informativas de avisos, erros de marca e regras
 travadas, preservando valores esperados e atuais para um fix plan auditável.
+O plano contém somente propriedades visuais corrigíveis e o fixer sempre salva
+uma cópia, confere os hashes do plano, valida o OOXML e executa o linter outra
+vez. Alterações de texto nunca são revertidas automaticamente.
 
 Exemplo mínimo, partindo de um pacote em `./minha-marca`:
 
@@ -144,9 +152,9 @@ e `fixed` são não bloqueantes), `2` para entrada/JSON/I/O inválido e `3` para
 verdict válido com ao menos um `blocked`. Erros aparecem em PT-BR no `stderr`.
 
 Todos os artefatos são UTF-8 sem BOM, camelCase, indentados com dois espaços e
-newline final. Escritas usam substituição atômica. `schemas` publica:
-`brand-ir.schema.json`, `layout-spec.schema.json`, `content-spec.schema.json` e
-`guard-verdict.schema.json`.
+newline final. Escritas usam substituição atômica. `schemas` publica os contratos
+de Brand IR, Layout Spec, Content Spec, Guard Verdict, Document Graph, relatório
+de round-trip, Fix Plan e Fix Result.
 
 ## API Python
 
@@ -155,9 +163,11 @@ As operações do plano-mestre também são reexportadas na raiz do pacote:
 ```python
 from brand_runtime import (
     build_draft,
+    build_fix_plan,
     compile_ir,
     derive_branded_template,
     generate_kit,
+    apply_pptx_fix_plan,
     render_docx,
     render_pptx,
     run_static_checks,

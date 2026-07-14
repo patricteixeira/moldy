@@ -37,8 +37,9 @@ from brand_runtime.kit.models import (
 from brand_runtime.native.docx import render_docx
 from brand_runtime.native.ooxml import canonical_ooxml_manifest, validate_ooxml
 from brand_runtime.native.pptx import inspect_semantic_shapes, render_pptx
-from brand_runtime.roundtrip.pptx import parse_pptx_document_graph
+from brand_runtime.roundtrip.fix import RoundtripFixError, apply_pptx_fix_plan, build_fix_plan
 from brand_runtime.roundtrip.lint import lint_roundtrip
+from brand_runtime.roundtrip.pptx import parse_pptx_document_graph
 from brand_runtime.native.preview import render_native_preview
 from brand_runtime.native.theme import derive_branded_template
 
@@ -442,6 +443,96 @@ def test_roundtrip_parser_builds_document_graph_after_google_style_save(
     assert report.summary.warning == 2
     assert report.summary.error == 2
     assert report.summary.fixable == 4
+
+    source_bytes = edited.read_bytes()
+    plan = build_fix_plan(graph, report)
+    assert [operation.property for operation in plan.operations] == ["color", "fontFamily"]
+    assert plan.operations[0].source_codes == ["brand-color", "color-changed"]
+    assert plan.operations[1].source_codes == ["brand-font", "font-changed"]
+
+    corrected = tmp_path / "corrected-copy.pptx"
+    result = apply_pptx_fix_plan(edited, corrected, plan, baseline, native_brand)
+    corrected_graph = parse_pptx_document_graph(corrected)
+
+    assert edited.read_bytes() == source_bytes
+    assert corrected_graph.source.sha256 != graph.source.sha256
+    assert corrected_graph.nodes[0].text == "Continua sim"
+    assert corrected_graph.nodes[0].font_family == "Georgia"
+    expected_color = native_brand.colors[native_brand.roles["heading"].color].value
+    assert corrected_graph.nodes[0].color == expected_color
+    assert result.applied_operation_ids == ["op-001", "op-002"]
+    assert [finding.code for finding in result.report.findings] == ["text-changed"]
+    assert result.report.summary.fixable == 0
+    assert result.report.summary.status == "review"
+    assert not [item for item in validate_ooxml(corrected) if item.blocking]
+
+    stale_plan = plan.model_copy(update={"edited_sha256": "0" * 64})
+    with pytest.raises(RoundtripFixError, match="bytes do arquivo mudaram"):
+        apply_pptx_fix_plan(
+            edited,
+            tmp_path / "must-not-exist.pptx",
+            stale_plan,
+            baseline,
+            native_brand,
+        )
+    assert not (tmp_path / "must-not-exist.pptx").exists()
+
+    baseline_path = tmp_path / "baseline.json"
+    edited_graph_path = tmp_path / "edited.json"
+    ir_path = tmp_path / "brand-ir.json"
+    for path, model in (
+        (baseline_path, baseline),
+        (edited_graph_path, graph),
+        (ir_path, native_brand),
+    ):
+        path.write_text(model.model_dump_json(by_alias=True), encoding="utf-8")
+    report_path = tmp_path / "report.json"
+    cli_result = RUNNER.invoke(
+        app,
+        [
+            "roundtrip-lint",
+            str(baseline_path),
+            str(edited_graph_path),
+            "--brand-ir",
+            str(ir_path),
+            "--out",
+            str(report_path),
+        ],
+    )
+    assert cli_result.exit_code == 0, cli_result.output
+    plan_path = tmp_path / "fix-plan.json"
+    cli_result = RUNNER.invoke(
+        app,
+        [
+            "roundtrip-plan",
+            str(edited_graph_path),
+            str(report_path),
+            "--out",
+            str(plan_path),
+        ],
+    )
+    assert cli_result.exit_code == 0, cli_result.output
+    cli_corrected = tmp_path / "cli-corrected-copy.pptx"
+    result_path = tmp_path / "fix-result.json"
+    cli_result = RUNNER.invoke(
+        app,
+        [
+            "roundtrip-fix",
+            str(edited),
+            str(baseline_path),
+            str(plan_path),
+            "--brand-ir",
+            str(ir_path),
+            "--out",
+            str(cli_corrected),
+            "--result-out",
+            str(result_path),
+        ],
+    )
+    assert cli_result.exit_code == 0, cli_result.output
+    cli_evidence = json.loads(result_path.read_text(encoding="utf-8"))
+    assert cli_evidence["report"]["summary"]["fixable"] == 0
+    assert edited.read_bytes() == source_bytes
 
 
 def test_docx_template_fill_uses_semantic_styles_and_native_image(

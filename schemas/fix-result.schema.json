@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "RoundtripFinding": {
+      "additionalProperties": false,
+      "description": "Mudança ou violação reencontrada, sem alterar o documento.",
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error",
+            "locked"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "messagePt": {
+          "title": "Messagept",
+          "type": "string"
+        },
+        "nodeId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nodeid"
+        },
+        "slotId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slotid"
+        },
+        "expected": {
+          "default": null,
+          "title": "Expected"
+        },
+        "actual": {
+          "default": null,
+          "title": "Actual"
+        },
+        "fixable": {
+          "default": false,
+          "title": "Fixable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "messagePt"
+      ],
+      "title": "RoundtripFinding",
+      "type": "object"
+    },
+    "RoundtripReport": {
+      "additionalProperties": false,
+      "description": "Relatório determinístico consumido pelos futuros fixer e web app.",
+      "properties": {
+        "schemaVersion": {
+          "const": "0.1.0",
+          "default": "0.1.0",
+          "title": "Schemaversion",
+          "type": "string"
+        },
+        "baselineSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Baselinesha256",
+          "type": "string"
+        },
+        "editedSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Editedsha256",
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/RoundtripSummary"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/RoundtripFinding"
+          },
+          "title": "Findings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baselineSha256",
+        "editedSha256",
+        "summary",
+        "findings"
+      ],
+      "title": "RoundtripReport",
+      "type": "object"
+    },
+    "RoundtripSummary": {
+      "additionalProperties": false,
+      "description": "Contagens estáveis para API e interface web.",
+      "properties": {
+        "status": {
+          "enum": [
+            "pass",
+            "review",
+            "blocked"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "total": {
+          "minimum": 0,
+          "title": "Total",
+          "type": "integer"
+        },
+        "info": {
+          "minimum": 0,
+          "title": "Info",
+          "type": "integer"
+        },
+        "warning": {
+          "minimum": 0,
+          "title": "Warning",
+          "type": "integer"
+        },
+        "error": {
+          "minimum": 0,
+          "title": "Error",
+          "type": "integer"
+        },
+        "locked": {
+          "minimum": 0,
+          "title": "Locked",
+          "type": "integer"
+        },
+        "fixable": {
+          "minimum": 0,
+          "title": "Fixable",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "status",
+        "total",
+        "info",
+        "warning",
+        "error",
+        "locked",
+        "fixable"
+      ],
+      "title": "RoundtripSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Evidência do novo artefato e do relint executado depois da correção.",
+  "properties": {
+    "schemaVersion": {
+      "const": "0.1.0",
+      "default": "0.1.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "sourceSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sourcesha256",
+      "type": "string"
+    },
+    "fixedSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Fixedsha256",
+      "type": "string"
+    },
+    "outputFilename": {
+      "title": "Outputfilename",
+      "type": "string"
+    },
+    "appliedOperationIds": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Appliedoperationids",
+      "type": "array"
+    },
+    "report": {
+      "$ref": "#/$defs/RoundtripReport"
+    }
+  },
+  "required": [
+    "sourceSha256",
+    "fixedSha256",
+    "outputFilename",
+    "appliedOperationIds",
+    "report"
+  ],
+  "title": "FixResult",
+  "type": "object"
+}

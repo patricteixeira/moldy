@@ -1,0 +1,112 @@
+{
+  "$defs": {
+    "FixOperation": {
+      "additionalProperties": false,
+      "description": "Uma alteração mínima, rastreável até findings do linter.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "slideIndex": {
+          "minimum": 1,
+          "title": "Slideindex",
+          "type": "integer"
+        },
+        "nodeId": {
+          "title": "Nodeid",
+          "type": "string"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "slotId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Slotid"
+        },
+        "property": {
+          "enum": [
+            "fontFamily",
+            "fontSizePt",
+            "color",
+            "boundsPt"
+          ],
+          "title": "Property",
+          "type": "string"
+        },
+        "expected": {
+          "title": "Expected"
+        },
+        "sourceCodes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sourcecodes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "slideIndex",
+        "nodeId",
+        "role",
+        "property",
+        "expected",
+        "sourceCodes"
+      ],
+      "title": "FixOperation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Plano determinístico que nunca contém alterações de conteúdo textual.",
+  "properties": {
+    "schemaVersion": {
+      "const": "0.1.0",
+      "default": "0.1.0",
+      "title": "Schemaversion",
+      "type": "string"
+    },
+    "baselineSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Baselinesha256",
+      "type": "string"
+    },
+    "editedSha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Editedsha256",
+      "type": "string"
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/FixOperation"
+      },
+      "title": "Operations",
+      "type": "array"
+    },
+    "deferredFindingCodes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Deferredfindingcodes",
+      "type": "array"
+    }
+  },
+  "required": [
+    "baselineSha256",
+    "editedSha256",
+    "operations",
+    "deferredFindingCodes"
+  ],
+  "title": "FixPlan",
+  "type": "object"
+}

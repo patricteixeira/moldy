@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "0.1.0",
+  "baselineSha256": "645da1f180b1d1c45a25b8cae50f698fd85ce5297e2281fb12b469d4ba8eed8b",
+  "editedSha256": "4e1f4a60f061dc47555e7a20b802cff665e2641abb99019ae57d0efeb0bc0225",
+  "operations": [
+    {
+      "id": "op-001",
+      "slideIndex": 1,
+      "nodeId": "slide-1/shape-84",
+      "role": "heading",
+      "slotId": "headline",
+      "property": "color",
+      "expected": "#F5F2EC",
+      "sourceCodes": [
+        "color-changed"
+      ]
+    },
+    {
+      "id": "op-002",
+      "slideIndex": 1,
+      "nodeId": "slide-1/shape-86",
+      "role": "logo",
+      "slotId": "logo",
+      "property": "boundsPt",
+      "expected": {
+        "x": 589.3333,
+        "y": 422.0,
+        "width": 64.0,
+        "height": 60.0
+      },
+      "sourceCodes": [
+        "geometry-changed"
+      ]
+    }
+  ],
+  "deferredFindingCodes": [
+    "text-changed",
+    "text-changed"
+  ]
+}
