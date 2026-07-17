@@ -73,6 +73,18 @@ moldura, padrão, hierarquia, contraste e logo adequada ao fundo permanecem
 travados por construção. A decisão está registrada na
 [`ADR 0010`](docs/adr/0010-gramatica-de-composicao-editorial.md).
 
+## Interface web
+
+O app organiza a jornada em três superfícies: instalação da marca, kit de
+composições e editor por slots. A linguagem visual combina tipografia editorial,
+grade assimétrica e uma paleta mineral com um único acento funcional. A interface
+é responsiva, oferece modos claro e escuro conforme a preferência do sistema e
+reduz o movimento quando solicitado pelo navegador.
+
+As transições e os comportamentos de rolagem usam GSAP como aprimoramento
+progressivo: conteúdo, navegação e ações continuam disponíveis sem depender da
+animação. As fontes da interface são servidas localmente pelo próprio app.
+
 ## Estrutura do repositório
 
 ```

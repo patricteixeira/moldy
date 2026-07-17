@@ -125,15 +125,22 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
 
   return (
     <main id="main-content" className="editor-page">
-      <header className="editor-heading">
-        <Link to={`/marcas/${encodeURIComponent(revisionId)}/kit`}>← Voltar ao kit</Link>
-        <p className="eyebrow">Mesa de prova</p>
-        <h1>{layout.namePt}</h1>
+      <header className="editor-heading" data-motion-enter>
+        <Link className="editor-back" to={`/marcas/${encodeURIComponent(revisionId)}/kit`}>
+          Voltar ao kit
+        </Link>
+        <div>
+          <p className="product-kicker">Mesa de prova</p>
+          <h1>{layout.namePt}</h1>
+        </div>
+        <p className="editor-intro">
+          Escreva, veja a composição responder e exporte quando tudo estiver no lugar.
+        </p>
       </header>
 
-      <div className="editor-workbench">
+      <div className="editor-workbench" data-motion-enter>
         <section className="editor-preview" aria-label="Prova da peça">
-          <p className="eyebrow">Prova ao vivo</p>
+          <h2 className="preview-heading">Prévia ao vivo</h2>
           <Preview
             brandIr={data.brandIr}
             layoutSpec={layout}

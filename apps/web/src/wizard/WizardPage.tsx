@@ -1,5 +1,6 @@
 import { useEffect, useReducer } from "react"
 import { useNavigate } from "react-router-dom"
+import { BrandEvidence } from "./BrandEvidence"
 import { PublishStep } from "./PublishStep"
 import { QuestionStep } from "./QuestionStep"
 import { UploadStep } from "./UploadStep"
@@ -17,15 +18,16 @@ export function WizardPage() {
 
   return (
     <main id="main-content" className="wizard-page">
-      <header className="page-heading">
-        <p className="eyebrow">brand-runtime · instalação</p>
+      <header className="wizard-hero-copy" data-motion-enter>
+        <p className="product-kicker">Ambiente de marca</p>
         <h1>Instalar marca</h1>
+        <p>
+          Converta manuais, logos e fontes em um sistema de criação que protege cada decisão da
+          identidade.
+        </p>
       </header>
       <div className="wizard-bench">
-        <aside className="wizard-rail" aria-hidden="true">
-          <span />
-        </aside>
-        <div className="wizard-stage">
+        <div className="wizard-stage" data-motion-enter>
           <div hidden={state.step !== "upload"}>
             <UploadStep
               onDraft={(result) =>
@@ -67,6 +69,7 @@ export function WizardPage() {
             />
           )}
         </div>
+        <BrandEvidence />
       </div>
     </main>
   )

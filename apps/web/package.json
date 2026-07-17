@@ -17,6 +17,10 @@
   },
   "dependencies": {
     "@brand-runtime/render": "file:../../packages/render",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/outfit": "^5.2.8",
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.15.0",
     "jszip": "^3.10.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

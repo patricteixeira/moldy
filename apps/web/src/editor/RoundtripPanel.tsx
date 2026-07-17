@@ -231,7 +231,6 @@ export function RoundtripPanel({
   return (
     <section className="roundtrip-panel" aria-labelledby="roundtrip-title">
       <header className="roundtrip-heading">
-        <p className="eyebrow">Volta do editor</p>
         <h2 id="roundtrip-title">Confira o arquivo que voltou</h2>
         <p>
           Seu texto é preservado. A mesa de prova aponta apenas o que saiu do padrão da marca.
@@ -239,9 +238,9 @@ export function RoundtripPanel({
       </header>
 
       <ol className="roundtrip-steps" aria-label="Como trazer o arquivo de volta">
-        <li><span>01</span><p>Edite o PPTX no Google Slides ou PowerPoint.</p></li>
-        <li><span>02</span><p>Salve novamente como arquivo PowerPoint.</p></li>
-        <li><span>03</span><p>Traga essa cópia para a conferência.</p></li>
+        <li><strong>Editar</strong><p>Abra o PPTX no Google Slides ou PowerPoint.</p></li>
+        <li><strong>Salvar</strong><p>Baixe novamente como arquivo PowerPoint.</p></li>
+        <li><strong>Conferir</strong><p>Traga essa cópia para a mesa de prova.</p></li>
       </ol>
 
       {!analysis ? (

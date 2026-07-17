@@ -33,7 +33,7 @@ it("lista os layouts com nome PT e thumbnail renderizado pela biblioteca real", 
   expect(mounts[0].payloads[0].assetsBaseUrl).toBe(
     "/v1/brand-revisions/brandrev_x/assets",
   )
-  expect(screen.getAllByTestId("preview-canvas")[0]).toHaveStyle({ maxWidth: "220px" })
+  expect(screen.getAllByTestId("preview-canvas")[0]).toHaveStyle({ maxWidth: "360px" })
 })
 
 it("clicar num layout abre o editor daquele layout", async () => {

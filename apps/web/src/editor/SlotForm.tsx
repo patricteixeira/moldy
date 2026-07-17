@@ -88,7 +88,6 @@ export function SlotForm({
   return (
     <form className="slot-form" onSubmit={(event) => event.preventDefault()}>
       <div className="slot-form-heading">
-        <p className="eyebrow">Conteúdo</p>
         <h2>Preencha a peça</h2>
         <p>Escreva e escolha imagens. A prova ao lado acompanha cada mudança.</p>
       </div>

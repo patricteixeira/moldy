@@ -131,9 +131,18 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
   return (
     <form className="upload-step" onSubmit={submit}>
       <p className="intro-copy">
-        Reúna o manual em PDF, os logos e as fontes da marca. Você pode escolher os
-        materiais em várias etapas: cada nova seleção será acrescentada ao pacote.
+        Reúna o manual, as assinaturas e as fontes. Novas seleções se somam ao mesmo
+        pacote sem apagar os materiais anteriores.
       </p>
+      <div className="format-marquee" aria-label="Formatos aceitos: PDF, SVG, PNG, TTF, OTF e JSON">
+        <div className="format-marquee-track" aria-hidden="true">
+          {[0, 1].map((group) => (
+            <span key={group}>
+              <b>PDF</b><b>SVG</b><b>PNG</b><b>TTF</b><b>OTF</b><b>JSON</b>
+            </span>
+          ))}
+        </div>
+      </div>
       <label
         className="file-receiver"
         htmlFor="wizard-files"
@@ -141,7 +150,12 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
         onDrop={onDrop}
       >
         <span>Escolher ou soltar materiais da marca</span>
+        <span className="file-receiver-action" aria-hidden="true">
+          <strong>Selecionar arquivos</strong>
+          <small>ou arraste para este campo</small>
+        </span>
         <input
+          className="visually-hidden"
           id="wizard-files"
           name="brand-package"
           data-testid="wizard-file-input"
@@ -160,8 +174,8 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
           <div className="package-summary-heading">
             <p id="package-summary-title" aria-live="polite">
               <strong>{files.length}</strong> {files.length === 1 ? "material reunido" : "materiais reunidos"}
-              <span aria-hidden="true"> · </span>
-              {pdfCount} PDF · {logoCount} {logoCount === 1 ? "logo" : "logos"} · {fontCount}{" "}
+              <span aria-hidden="true">, </span>
+              {pdfCount} PDF, {logoCount} {logoCount === 1 ? "logo" : "logos"}, {fontCount}{" "}
               {fontCount === 1 ? "fonte" : "fontes"}
             </p>
             <button

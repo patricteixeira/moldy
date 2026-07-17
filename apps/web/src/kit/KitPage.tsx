@@ -95,39 +95,51 @@ export function KitPage(): JSX.Element {
 
   return (
     <main id="main-content" className="kit-page">
-      <header className="kit-heading">
-        <p className="eyebrow">Caderno de aplicações</p>
-        <h1>Kit da marca</h1>
-        <p className="kit-intro">
-          Dez provas prontas para receber conteúdo, preservando as decisões publicadas da marca.
-        </p>
-      </header>
-
-      <div className="kit-grid" aria-label="Layouts disponíveis">
-        {kit.layouts.map((layout, index) => (
-          <Link
-            key={layout.id}
-            className="kit-card"
-            to={`/marcas/${encodeURIComponent(revisionId)}/editor/${encodeURIComponent(layout.id)}`}
-            data-layout-id={layout.id}
-            data-testid="kit-card"
-            aria-label={`Abrir ${layout.namePt}`}
-          >
-            <span className="kit-proof">
-              <Preview
-                brandIr={kit.brandIr}
-                layoutSpec={layout}
-                contentSpec={placeholderContent(layout, revisionId)}
-                assetsBaseUrl={assetsBaseUrl}
-                maxWidthPx={220}
-              />
-            </span>
-            <span className="kit-card-caption">
-              <span className="kit-card-index">Prova {String(index + 1).padStart(2, "0")}</span>
-              <span>{layout.namePt}</span>
-            </span>
+      <div className="kit-layout">
+        <header className="kit-heading" data-motion-enter>
+          <p className="product-kicker">Aplicações publicadas</p>
+          <h1>Kit da marca</h1>
+          <p className="kit-intro">
+            Formatos prontos para receber conteúdo sem abandonar as decisões da identidade.
+          </p>
+          <p className="kit-count">{kit.layouts.length} formatos disponíveis</p>
+          <Link className="text-action" to="/">
+            Instalar outra marca
           </Link>
-        ))}
+        </header>
+
+        <div
+          className="kit-grid"
+          data-layout-count={kit.layouts.length}
+          aria-label="Layouts disponíveis"
+        >
+          {kit.layouts.map((layout) => (
+            <Link
+              key={layout.id}
+              className="kit-card"
+              to={`/marcas/${encodeURIComponent(revisionId)}/editor/${encodeURIComponent(layout.id)}`}
+              data-layout-id={layout.id}
+              data-testid="kit-card"
+              aria-label={`Abrir ${layout.namePt}`}
+            >
+              <span className="kit-proof">
+                <Preview
+                  brandIr={kit.brandIr}
+                  layoutSpec={layout}
+                  contentSpec={placeholderContent(layout, revisionId)}
+                  assetsBaseUrl={assetsBaseUrl}
+                  maxWidthPx={360}
+                />
+              </span>
+              <span className="kit-card-caption">
+                <span>{layout.namePt}</span>
+                <span className="kit-card-meta">
+                  {layout.canvas.widthPx} × {layout.canvas.heightPx} px
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
       </div>
     </main>
   )
