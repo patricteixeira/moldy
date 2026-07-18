@@ -398,3 +398,40 @@ it("edita tipografia, posição, opacidade e escala da logo no arquivo final", a
     }),
   )
 })
+
+it("arrasta com o ponteiro a camada de texto que já está selecionada", async () => {
+  renderEditor(kitClient())
+  await screen.findByTestId("slot-input-headline")
+
+  const selection = screen.getByTestId("canvas-selection")
+  expect(selection).toHaveAccessibleName(
+    "Camada Frase principal selecionada. Arraste para mover ou use as setas do teclado.",
+  )
+
+  fireEvent(selection, new MouseEvent("pointerdown", {
+    bubbles: true,
+    button: 0,
+    clientX: 120,
+    clientY: 240,
+  }))
+  fireEvent(selection, new MouseEvent("pointermove", {
+    bubbles: true,
+    clientX: 140,
+    clientY: 250,
+  }))
+
+  expect(selection).toHaveStyle({ left: "88px", top: "344px" })
+  expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-dragging", "true")
+
+  fireEvent(selection, new MouseEvent("pointerup", {
+    bubbles: true,
+    clientX: 140,
+    clientY: 250,
+  }))
+
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.overrides?.headline?.area).toEqual([88, 344, 984, 432]),
+  )
+  expect(screen.getByTestId("canvas-selection")).toHaveAttribute("data-layer", "headline")
+  expect(screen.getByTestId("preview-canvas")).not.toHaveAttribute("data-dragging")
+})

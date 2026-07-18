@@ -444,7 +444,16 @@
 
   .preview-canvas-editable [data-slot-id],
   .preview-canvas-editable [data-layer-id] {
-    cursor: move;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .preview-canvas-editable[data-dragging="true"],
+  .preview-canvas-editable[data-dragging="true"] [data-slot-id],
+  .preview-canvas-editable[data-dragging="true"] [data-layer-id],
+  .preview-canvas-editable[data-dragging="true"] .canvas-selection {
+    cursor: grabbing;
   }
 
   .canvas-selection {
@@ -453,8 +462,15 @@
     border: 2px solid var(--editor-accent-bright);
     outline: 1px solid rgb(255 255 255 / 62%);
     outline-offset: 2px;
-    cursor: move;
+    cursor: grab;
     pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .canvas-selection:focus-visible {
+    outline: 3px solid #f7f2e9;
+    outline-offset: 4px;
   }
 
   .canvas-selection::before,
