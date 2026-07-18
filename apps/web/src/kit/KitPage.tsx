@@ -100,7 +100,7 @@ export function KitPage(): JSX.Element {
           <p className="product-kicker">Aplicações publicadas</p>
           <h1>Kit da marca</h1>
           <p className="kit-intro">
-            Formatos prontos para receber conteúdo sem abandonar as decisões da identidade.
+            Escolha uma peça para editar textos e imagens sem abandonar as decisões da identidade.
           </p>
           <p className="kit-count">{kit.layouts.length} formatos disponíveis</p>
           <Link className="text-action" to="/">
@@ -120,7 +120,7 @@ export function KitPage(): JSX.Element {
               to={`/marcas/${encodeURIComponent(revisionId)}/editor/${encodeURIComponent(layout.id)}`}
               data-layout-id={layout.id}
               data-testid="kit-card"
-              aria-label={`Abrir ${layout.namePt}`}
+              aria-label={`Editar ${layout.namePt}`}
             >
               <span className="kit-proof">
                 <Preview
@@ -132,7 +132,10 @@ export function KitPage(): JSX.Element {
                 />
               </span>
               <span className="kit-card-caption">
-                <span>{layout.namePt}</span>
+                <span>
+                  <span>{layout.namePt}</span>
+                  <span className="kit-card-action">Editar peça →</span>
+                </span>
                 <span className="kit-card-meta">
                   {layout.canvas.widthPx} × {layout.canvas.heightPx} px
                 </span>

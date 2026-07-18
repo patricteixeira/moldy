@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { expect, it, vi } from "vitest"
@@ -29,7 +29,7 @@ it("lista os layouts com nome PT e thumbnail renderizado pela biblioteca real", 
   expect(cards).toHaveLength(2)
   expect(screen.getByText("Frase de impacto")).toBeInTheDocument()
   expect(screen.getByText("Citação sobre foto")).toBeInTheDocument()
-  expect(mounts).toHaveLength(2)
+  await waitFor(() => expect(mounts).toHaveLength(2))
   expect(mounts[0].payloads[0].assetsBaseUrl).toBe(
     "/v1/brand-revisions/brandrev_x/assets",
   )

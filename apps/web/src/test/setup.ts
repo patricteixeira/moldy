@@ -18,6 +18,7 @@ if (typeof Blob.prototype.arrayBuffer !== "function") {
 
 beforeEach(() => {
   mounts.length = 0
+  window.localStorage.clear()
 })
 
 afterEach(() => cleanup())

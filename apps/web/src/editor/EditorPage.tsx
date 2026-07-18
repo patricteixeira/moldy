@@ -6,6 +6,7 @@ import type { BrandIr, ContentSpec, LayoutSpec, SlotValue } from "../api/types"
 import { Preview } from "../render/Preview"
 import { ExportControls } from "./ExportControls"
 import { SlotForm } from "./SlotForm"
+import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "./draftStorage"
 import { exactOccurrenceCount } from "./emphasis"
 
 interface EditorPageProps {
@@ -25,6 +26,8 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [draftReady, setDraftReady] = useState(false)
+  const [draftSaved, setDraftSaved] = useState(true)
 
   useEffect(() => {
     let active = true
@@ -33,6 +36,8 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     setValues({})
     setUploading(false)
     setExporting(false)
+    setDraftReady(false)
+    setDraftSaved(true)
 
     if (!revisionId) {
       setError("Revisão de marca não encontrada.")
@@ -43,7 +48,11 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
 
     void Promise.all([api.getBrandRevision(revisionId), api.getKit(revisionId)])
       .then(([brandIr, layouts]) => {
-        if (active) setData({ brandIr, layouts })
+        if (!active) return
+        const activeLayout = layouts.find((candidate) => candidate.id === layoutId)
+        setData({ brandIr, layouts })
+        setValues(activeLayout ? loadEditorDraft(revisionId, activeLayout) : {})
+        setDraftReady(true)
       })
       .catch((caught: unknown) => {
         if (!active) return
@@ -57,7 +66,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     return () => {
       active = false
     }
-  }, [api, revisionId])
+  }, [api, layoutId, revisionId])
 
   const layout = useMemo(
     () => data?.layouts.find((candidate) => candidate.id === layoutId) ?? null,
@@ -88,6 +97,11 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     )
     return { ...contentSpec, values: previewValues }
   }, [contentSpec])
+
+  useEffect(() => {
+    if (!draftReady || !revisionId || !layout) return
+    setDraftSaved(saveEditorDraft(revisionId, layout.id, values))
+  }, [draftReady, layout, revisionId, values])
 
   if (error) {
     return (
@@ -123,6 +137,11 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     })
   }
 
+  const clearDraft = (): void => {
+    setValues({})
+    setDraftSaved(clearEditorDraft(revisionId, layout.id))
+  }
+
   return (
     <main id="main-content" className="editor-page">
       <header className="editor-heading" data-motion-enter>
@@ -137,6 +156,21 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
           Escreva, veja a composição responder e exporte quando tudo estiver no lugar.
         </p>
       </header>
+
+      <div className="editor-draft-bar" data-motion-enter>
+        <p role="status" aria-live="polite">
+          {draftSaved
+            ? Object.keys(values).length > 0
+              ? "Rascunho salvo neste navegador."
+              : "Comece a editar: suas alterações serão salvas automaticamente."
+            : "Não foi possível salvar o rascunho neste navegador."}
+        </p>
+        {Object.keys(values).length > 0 ? (
+          <button type="button" className="secondary-action" onClick={clearDraft}>
+            Limpar alterações
+          </button>
+        ) : null}
+      </div>
 
       <div className="editor-workbench" data-motion-enter>
         <section className="editor-preview" aria-label="Prova da peça">

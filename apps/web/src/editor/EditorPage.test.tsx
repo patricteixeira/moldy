@@ -61,6 +61,52 @@ it("digitar num slot atualiza o preview ao vivo", async () => {
   )
 })
 
+it("salva o rascunho e o recupera ao reabrir a peça", async () => {
+  const key = "brand-runtime:editor-draft:v1:brandrev_test:statement-post-1x1"
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      version: 1,
+      values: { headline: { kind: "text", text: "Texto que continua aqui" } },
+    }),
+  )
+
+  renderEditor(kitClient())
+
+  expect(await screen.findByTestId("slot-input-headline")).toHaveValue(
+    "Texto que continua aqui",
+  )
+  expect(screen.getByText("Rascunho salvo neste navegador.")).toBeInTheDocument()
+
+  await userEvent.type(screen.getByTestId("slot-input-headline"), " depois")
+  await waitFor(() =>
+    expect(JSON.parse(window.localStorage.getItem(key) ?? "{}")).toMatchObject({
+      values: { headline: { kind: "text", text: "Texto que continua aqui depois" } },
+    }),
+  )
+})
+
+it("permite limpar o rascunho salvo da peça", async () => {
+  const key = "brand-runtime:editor-draft:v1:brandrev_test:statement-post-1x1"
+  window.localStorage.setItem(
+    key,
+    JSON.stringify({
+      version: 1,
+      values: { headline: { kind: "text", text: "Apagar este rascunho" } },
+    }),
+  )
+  renderEditor(kitClient())
+
+  expect(await screen.findByTestId("slot-input-headline")).toHaveValue("Apagar este rascunho")
+  await userEvent.click(screen.getByRole("button", { name: "Limpar alterações" }))
+
+  expect(screen.getByTestId("slot-input-headline")).toHaveValue("")
+  expect(window.localStorage.getItem(key)).toBeNull()
+  expect(
+    screen.getByText("Comece a editar: suas alterações serão salvas automaticamente."),
+  ).toBeInTheDocument()
+})
+
 it("oferece destaque leigo no arquétipo editorial e o preserva ao editar a frase", async () => {
   renderEditor(
     fakeClient({ getKit: vi.fn(async () => [fakeEditorialLayout()]) }),

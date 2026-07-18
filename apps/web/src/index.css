@@ -599,6 +599,16 @@
     padding-top: clamp(2rem, 5vw, 5rem);
   }
 
+  .editor-draft-bar {
+    display: flex;
+    min-height: 4.75rem;
+    gap: var(--space-4);
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--ui-rule);
+    padding-block: var(--space-4);
+  }
+
   .editor-preview {
     position: sticky;
     top: var(--space-6);
@@ -1146,6 +1156,20 @@
     font-weight: 650;
     line-height: 1.25;
     overflow-wrap: anywhere;
+  }
+
+  .kit-card-caption > span:first-child {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  .kit-card-action {
+    color: var(--ui-accent);
+    font-family: "JetBrains Mono Variable", monospace;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
   .kit-card-meta {
@@ -1938,6 +1962,11 @@
 
     .editor-heading {
       gap: var(--space-5);
+    }
+
+    .editor-draft-bar {
+      align-items: stretch;
+      flex-direction: column;
     }
 
     .editor-workbench {
