@@ -2,9 +2,25 @@
 name = "brand-runtime-adapter-sdk"
 version = "0.1.0"
 description = "SDK Python MIT para produzir Brand Packages do ecossistema brand-runtime"
+readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+authors = [{ name = "Patric Teixeira" }]
+keywords = ["brand", "design-system", "adapter", "dtcg"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/patricteixeira/Molda"
+Repository = "https://github.com/patricteixeira/Molda"
+Issues = "https://github.com/patricteixeira/Molda/issues"
+Changelog = "https://github.com/patricteixeira/Molda/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.2", "ruff>=0.6"]

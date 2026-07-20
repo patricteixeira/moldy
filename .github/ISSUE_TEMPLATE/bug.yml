@@ -1,0 +1,67 @@
+name: Relatar um bug
+description: Registrar um comportamento reproduzível do Molda
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Não publique segredos, materiais privados nem vulnerabilidades. Falhas de segurança seguem `SECURITY.md`.
+  - type: input
+    id: version
+    attributes:
+      label: Versão ou commit
+      placeholder: v0.1.0 ou SHA do commit
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Componente
+      options:
+        - Stack Docker / instalação
+        - Wizard / intake
+        - Kit / editor
+        - Campanhas
+        - Word / DOCX
+        - Exportação PNG/PDF/PPTX/DOCX
+        - Round-trip / Guard
+        - Engine / CLI
+        - SDK / schemas
+        - Outro
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reprodução mínima
+      description: Liste os passos e use somente fixtures que podem ser públicas.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Resultado esperado
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Resultado observado
+      description: Inclua mensagens de erro e logs já sanitizados.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Ambiente
+      placeholder: Windows/Linux/macOS, Docker, navegador e editor externo quando aplicável
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Confirmação
+      options:
+        - label: Removi segredos, dados pessoais, fontes comerciais e materiais privados.
+          required: true

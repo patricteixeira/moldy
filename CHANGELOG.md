@@ -6,8 +6,17 @@ release pública.
 
 ## [Não lançado]
 
+## [0.1.0] - 2026-07-19
+
 ### Alterado
 
+- A porta web da distribuição Docker pode ser escolhida por `BRANDRT_PORT`,
+  preservando o bind exclusivo em `127.0.0.1` e o padrão `8080`.
+- O Postgres passa a reiniciar com o daemon do Docker; API e worker não ficam em
+  loop por ausência do banco depois de reiniciar a máquina ou o Docker Desktop.
+- O proxy web re-resolve a API pelo DNS interno do Docker e seu healthcheck
+  atravessa essa fronteira; a interface se recupera quando containers recebem
+  novos endereços depois de reiniciar o daemon.
 - O editor deixa de confinar camadas ao canvas: arraste, resize, teclado e
   campos numéricos aceitam sangria, coordenadas negativas e logos maiores que a
   peça; o corte final continua explícito e desvios geram orientação.
@@ -130,8 +139,9 @@ release pública.
 
 ### Segurança
 
-- Bases Nginx do web e do proxy de fontes atualizadas para 1.30.3, com digest
-  fixado fora das faixas vulneráveis conhecidas da linha 1.27.
+- Web e proxy de fontes usam a variante oficial mínima do Nginx 1.30.3, fixada
+  por digest e sem os pacotes Alpine atingidos pelas CVEs corrigíveis encontradas
+  no audit; o gate recusa novas vulnerabilidades High/Critical com correção.
 
 ### Corrigido
 
@@ -169,3 +179,6 @@ release pública.
 - O fluxo integrado API→worker exportou, reimportou, analisou e corrigiu um PPTX
   nativo pelo storage real de teste, preservando o upload original e eliminando
   todos os findings visuais corrigíveis.
+
+[Não lançado]: https://github.com/patricteixeira/Molda/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/patricteixeira/Molda/releases/tag/v0.1.0

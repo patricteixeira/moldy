@@ -21,6 +21,7 @@ services:
 
   postgres:
     image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    restart: unless-stopped
     environment:
       POSTGRES_USER: brandrt
       POSTGRES_PASSWORD: ${BRANDRT_DB_PASSWORD:?Defina BRANDRT_DB_PASSWORD em .env ou no ambiente}
@@ -132,10 +133,16 @@ services:
       BRANDRT_API_TOKEN: ${BRANDRT_TOKEN:-brandrt-dev}
       NGINX_ENVSUBST_FILTER: ^BRANDRT_API_TOKEN$
     ports:
-      - "127.0.0.1:8080:80"
+      - "127.0.0.1:${BRANDRT_PORT:-8080}:80"
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     restart: on-failure
     security_opt:
       - no-new-privileges:true

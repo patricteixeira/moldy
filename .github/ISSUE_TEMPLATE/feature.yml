@@ -1,0 +1,38 @@
+name: Propor uma evolução
+description: Delimitar uma necessidade de produto ou integração
+title: "[Proposta]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema real
+      description: Quem encontra este problema e em qual fluxo?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidência e contexto
+      description: Descreva o caso sem anexar materiais de marca privados.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Resultado desejado
+      description: Explique a capacidade, não apenas uma tecnologia preferida.
+    validations:
+      required: true
+  - type: textarea
+    id: limits
+    attributes:
+      label: Limites aceitáveis
+      description: O que pode ficar explicitamente fora deste recorte?
+  - type: checkboxes
+    id: posture
+    attributes:
+      label: Alinhamento
+      options:
+        - label: A proposta preserva o foco em marca instalada, autoria e decisões explicáveis.
+          required: true

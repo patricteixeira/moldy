@@ -6,7 +6,7 @@ RUN cd packages/render && npm ci && npm run build
 COPY apps/web apps/web
 RUN cd apps/web && npm ci && npm run build
 
-FROM nginx:1.30.3-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1
+FROM nginx:1.30.3-alpine-slim@sha256:d5b51cfc7d55fc7a7bcf4d1d577b9c3738331df56d68f0b1d8ac9795b9470a5a
 
 COPY infra/docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY infra/docker/validate-web-env.sh /docker-entrypoint.d/05-validate-web-env.sh

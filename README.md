@@ -1,5 +1,9 @@
 # Molda
 
+[![CI](https://github.com/patricteixeira/Molda/actions/workflows/ci.yml/badge.svg)](https://github.com/patricteixeira/Molda/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/patricteixeira/Molda?display_name=tag&sort=semver)](https://github.com/patricteixeira/Molda/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-111111.svg)](LICENSE)
+
 > Runtime de marca open source e self-hosted: interpreta uma identidade visual
 > existente, converte-a num perfil executável e dá a pessoas leigas um ambiente
 > de criação orientado pelas decisões reais da marca.
@@ -14,25 +18,29 @@ continuam salváveis e exportáveis. Apenas falhas de segurança, integridade ou
 contrato técnico impedem a produção do arquivo. Veja o
 [ADR 0014](docs/adr/0014-guard-orienta-sem-policiar.md).
 
-**Status: produto funcional em evolução** — motor, renderer, API, worker e app
-web compõem fluxos executáveis de ponta a ponta, cobertos por testes de contrato,
-integração e interface.
+**Status: candidata a v0.1.0** — motor, renderer, API, worker e app web compõem
+fluxos executáveis de ponta a ponta, cobertos por testes de contrato, integração,
+interface e smoke test da distribuição Docker. A linha `0.x` ainda não promete
+estabilidade de todos os contratos internos.
 A spec fundadora está em
 [`docs/superpowers/specs/2026-07-11-brand-runtime-design.md`](docs/superpowers/specs/2026-07-11-brand-runtime-design.md).
 
 ## Quickstart self-hosted
 
-Pré-requisitos: Docker Desktop/Compose. Defina um token URL-safe antes da
-primeira subida (letras, números, ponto, sublinhado, til ou hífen):
+Pré-requisitos: Git e Docker Desktop/Engine com Compose v2. Copie a configuração
+e defina um token URL-safe antes da primeira subida (letras, números, ponto,
+sublinhado, til ou hífen):
 
 ```powershell
-$env:BRANDRT_TOKEN = "troque-por-um-token-local-seguro"
-$env:BRANDRT_DB_PASSWORD = "troque-por-uma-senha-local-segura"
-docker compose up --build
+Copy-Item .env.example .env
+# Edite BRANDRT_TOKEN e BRANDRT_DB_PASSWORD em .env.
+docker compose up -d --build --wait
 ```
 
-Abra `http://localhost:8080`. A porta é ligada somente a `127.0.0.1`; exposição
-na rede exige uma decisão operacional explícita e TLS na frente do serviço.
+Abra `http://localhost:8080`. Para evitar uma porta já ocupada, altere
+`BRANDRT_PORT` no `.env` antes de subir a stack. A porta continua ligada somente
+a `127.0.0.1`; exposição na rede exige uma decisão operacional explícita e TLS
+na frente do serviço.
 
 Sem `BRANDRT_TOKEN`, o Compose usa `brandrt-dev`, destinado apenas a testes
 locais. O nginx injeta o convite no proxy same-origin, então o M1 não apresenta
@@ -45,6 +53,22 @@ convite, mas não revoga o anterior; para reiniciar a instância local sem dados
 ```powershell
 docker compose down -v
 ```
+
+`down -v` apaga os volumes locais desta stack. Para apenas parar os serviços e
+preservar os dados, use `docker compose down`.
+
+### Escopo conhecido da v0.1
+
+- a distribuição suportada é self-hosted e single-tenant, sem login por pessoa;
+- a porta fica restrita a localhost; exposição pública exige TLS e controle de
+  acesso externos;
+- o round-trip PPTX está comprovado em Google Slides, LibreOffice e testes
+  estruturais, mas o gate de PowerPoint Desktop continua aberto;
+- o SDK e o contrato de adapters estão disponíveis, mas o importador Figma e a
+  instância pública multi-tenant não fazem parte deste corte.
+
+Veja as [notas completas da v0.1.0](docs/releases/v0.1.0.md) e a
+[política de segurança](SECURITY.md).
 
 | Serviço | Responsabilidade | Porta publicada |
 | --- | --- | --- |
@@ -179,6 +203,9 @@ Os demais componentes têm instruções próprias:
 - **Decisões arquiteturais (ADRs)** — `docs/adr/`
 - **Padrões de engenharia** — [`ENGINEERING.md`](ENGINEERING.md)
 - **Adapters comunitários** — [`docs/ecosystem/adapters.md`](docs/ecosystem/adapters.md)
+- **Como contribuir** — [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Segurança** — [`SECURITY.md`](SECURITY.md)
+- **Processo de release** — [`RELEASING.md`](RELEASING.md)
 
 ## Licenças
 
@@ -187,7 +214,11 @@ Os demais componentes têm instruções próprias:
 - Schemas públicos do motor (`schemas/`): **MIT**
   ([`schemas/LICENSE`](schemas/LICENSE)) — Brand IR, Layout Spec, Content Spec e
   Guard Verdict podem ser adotados por qualquer ferramenta, inclusive fechada.
-  A escolha ainda passa por revisão jurídica antes da publicação pública
-  (ADR 0003).
 - SDK Python para adapters (`packages/adapter-sdk-python/`): **MIT** — pode ser
   usado por integrações externas sem carregar nem incorporar o engine AGPL.
+- Documentação (`docs/`): **CC BY 4.0**
+  ([`docs/LICENSE`](docs/LICENSE)) — pode ser adaptada com atribuição.
+
+As fronteiras e alternativas estão registradas no
+[`ADR 0003`](docs/adr/0003-licencas-agpl-app-mit-schema.md). A ratificação final
+da revisão de licenças é um gate humano explícito do workflow de release.
