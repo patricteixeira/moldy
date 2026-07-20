@@ -23,6 +23,9 @@ def _slides(count: int) -> list[dict]:
 
 
 def test_carousel_derives_cover_content_closing_and_signature(client, compiled):
+    slides = _slides(5)
+    slides[0]["backgroundColorToken"] = "color.primary"
+    slides[0]["logoAssetToken"] = "logo.primary"
     response = client.post(
         "/v1/carousels",
         json={
@@ -34,7 +37,7 @@ def test_carousel_derives_cover_content_closing_and_signature(client, compiled):
                 "vertical": "top",
                 "horizontal": "right",
             },
-            "slides": _slides(5),
+            "slides": slides,
         },
     )
 
@@ -59,6 +62,13 @@ def test_carousel_derives_cover_content_closing_and_signature(client, compiled):
     assert second["content"]["values"]["body-2"]["text"] == "Segundo argumento."
     assert second["content"]["overrides"]["signature"]["area"] == [580, 80, 420, 32]
     assert second["content"]["overrides"]["signature"]["textAlign"] == "right"
+    cover = carousel["slides"][0]
+    assert cover["source"]["backgroundColorToken"] == "color.primary"
+    assert cover["source"]["logoAssetToken"] == "logo.primary"
+    assert cover["content"]["backgroundColorToken"] == "color.primary"
+    assert cover["content"]["assetBindings"] == {"logo": "logo.primary"}
+    assert second["content"]["backgroundColorToken"] is None
+    assert second["content"]["assetBindings"] == {}
 
 
 def test_carousel_export_publishes_ordered_png_zip(client, compiled):

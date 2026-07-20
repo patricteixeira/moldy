@@ -17,7 +17,14 @@ const MIN_SLIDES = 3
 const MAX_SLIDES = 20
 
 function emptySlide(): CarouselSlideInput {
-  return { kicker: "", headline: "", textBlocks: [], cta: "" }
+  return {
+    kicker: "",
+    headline: "",
+    textBlocks: [],
+    cta: "",
+    backgroundColorToken: null,
+    logoAssetToken: null,
+  }
 }
 
 function initialSlides(count: number): CarouselSlideInput[] {
@@ -39,6 +46,23 @@ function resizeSlides(current: CarouselSlideInput[], count: number): CarouselSli
     (_, index) => currentContent[index] ?? emptySlide(),
   )
   return [cover, ...content, closing]
+}
+
+function humanizeToken(token: string, prefix: string): string {
+  const standardLabels: Record<string, string> = {
+    "color.primary": "Principal",
+    "color.secondary": "Secundária",
+    "color.background": "Fundo",
+    "color.text": "Texto",
+    "logo.primary": "Principal",
+    "logo.onLight": "Para fundo claro",
+    "logo.onDark": "Para fundo escuro",
+  }
+  const known = standardLabels[token]
+  if (known) return known
+  const raw = token.startsWith(prefix) ? token.slice(prefix.length) : token
+  const words = raw.replace(/([a-zà-ÿ])([A-ZÀ-Ý])/g, "$1 $2").replace(/[._-]+/g, " ").trim()
+  return words ? `${words.charAt(0).toLocaleUpperCase("pt-BR")}${words.slice(1)}` : token
 }
 
 const signaturePositions: Array<{
@@ -129,6 +153,15 @@ export function CarouselPage(): JSX.Element {
     updateSlide({
       textBlocks: activeSlide.textBlocks.filter((_, blockIndex) => blockIndex !== index),
     })
+  }
+
+  const applyAppearanceToAll = (
+    field: "backgroundColorToken" | "logoAssetToken",
+    value: string | null,
+  ) => {
+    setSlides((current) => current.map((slide) => ({ ...slide, [field]: value })))
+    setCarousel(null)
+    setDownload(null)
   }
 
   const generate = async () => {
@@ -347,6 +380,105 @@ export function CarouselPage(): JSX.Element {
             <span>Slide {String(activeIndex + 1).padStart(2, "0")}</span>
             <strong>{activeRole}</strong>
           </div>
+          <section className="carousel-appearance" aria-labelledby="carousel-appearance-title">
+            <div className="carousel-appearance-heading">
+              <div>
+                <h3 id="carousel-appearance-title">Aparência deste slide</h3>
+                <p>Escolha um fundo da marca. A logo acompanha o contraste automaticamente.</p>
+              </div>
+              <span>{activeRole}</span>
+            </div>
+
+            <div className="carousel-appearance-grid">
+              <div className="carousel-background-control">
+                <div className="carousel-control-heading">
+                  <strong>Cor de fundo</strong>
+                  <button
+                    type="button"
+                    className="text-action"
+                    disabled={!activeSlide.backgroundColorToken}
+                    onClick={() => updateSlide({ backgroundColorToken: null })}
+                  >
+                    Usar o modelo
+                  </button>
+                </div>
+                <div className="carousel-color-grid" role="group" aria-label="Cor de fundo deste slide">
+                  {Object.entries(brandIr.colors).map(([token, color]) => (
+                    <button
+                      key={token}
+                      type="button"
+                      className="carousel-color-option"
+                      aria-label={`${humanizeToken(token, "color.")}, ${color.value}`}
+                      aria-pressed={activeSlide.backgroundColorToken === token}
+                      data-active={activeSlide.backgroundColorToken === token || undefined}
+                      onClick={() => updateSlide({ backgroundColorToken: token })}
+                    >
+                      <span style={{ backgroundColor: color.value }} />
+                      <span>
+                        <b>{humanizeToken(token, "color.")}</b>
+                        <small>{color.value}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="secondary-action carousel-apply-all"
+                  onClick={() =>
+                    applyAppearanceToAll(
+                      "backgroundColorToken",
+                      activeSlide.backgroundColorToken ?? null,
+                    )
+                  }
+                >
+                  Aplicar este fundo aos {slides.length} slides
+                </button>
+              </div>
+
+              <div className="carousel-logo-control">
+                <label htmlFor="carousel-logo-asset">
+                  <span>Versão da marca</span>
+                  <select
+                    id="carousel-logo-asset"
+                    value={activeSlide.logoAssetToken ?? ""}
+                    onChange={(event) =>
+                      updateSlide({ logoAssetToken: event.currentTarget.value || null })
+                    }
+                  >
+                    <option value="">Automática para o fundo</option>
+                    {Object.keys(brandIr.assets)
+                      .filter((token) => token.startsWith("logo."))
+                      .sort((left, right) => left.localeCompare(right))
+                      .map((token) => (
+                        <option key={token} value={token}>
+                          {humanizeToken(token, "logo.")}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                {"logo.onLight" in brandIr.assets && "logo.onDark" in brandIr.assets ? (
+                  <p>
+                    No automático, o Molda usa a versão clara ou escura adequada ao fundo deste
+                    slide.
+                  </p>
+                ) : (
+                  <p className="carousel-appearance-warning">
+                    Esta revisão tem apenas uma versão da logo. Fundos de baixo contraste podem
+                    esconder a marca.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  className="secondary-action carousel-apply-all"
+                  onClick={() =>
+                    applyAppearanceToAll("logoAssetToken", activeSlide.logoAssetToken ?? null)
+                  }
+                >
+                  Aplicar esta escolha aos {slides.length} slides
+                </button>
+              </div>
+            </div>
+          </section>
           <label>
             <span>Contexto curto <small>(opcional)</small></span>
             <input

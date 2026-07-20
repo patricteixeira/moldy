@@ -45,6 +45,8 @@ class CarouselSlideInput(BaseModel):
     headline: str = Field(min_length=1, max_length=180)
     text_blocks: list[str] = Field(default_factory=list, max_length=6)
     cta: str = Field(default="", max_length=240)
+    background_color_token: str | None = Field(default=None, min_length=1)
+    logo_asset_token: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
     def _non_blank_content(self) -> CarouselSlideInput:
@@ -193,6 +195,8 @@ def _document_body(
         layout_id=layout.id,
         brand_revision_id=revision_id,
         values=values,
+        background_color_token=slide.background_color_token,
+        asset_bindings={"logo": slide.logo_asset_token} if slide.logo_asset_token else {},
         overrides=_content_overrides(ir, layout, slide, signature),
         surface=suggested_surface(ir),
     )

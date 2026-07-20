@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { expect, it, vi } from "vitest"
 import { ApiProvider } from "../api/context"
 import type { ApiClient } from "../api/types"
-import { fakeCarousel, fakeClient } from "../test/fakeApi"
+import { FAKE_IR, fakeCarousel, fakeClient } from "../test/fakeApi"
 import { CarouselPage } from "./CarouselPage"
 
 function renderCarousel(client: ApiClient) {
@@ -47,6 +47,36 @@ it("adiciona e remove blocos de texto no miolo", async () => {
   expect(screen.queryByLabelText("Bloco 2")).not.toBeInTheDocument()
 })
 
+it("configura fundo e logo por slide e permite repetir a escolha na sequência", async () => {
+  const user = userEvent.setup()
+  const brandIr = {
+    ...FAKE_IR,
+    assets: {
+      ...FAKE_IR.assets,
+      "logo.onDark": {
+        ...FAKE_IR.assets["logo.onLight"],
+        path: "assets/logos/logo-on-dark.svg",
+      },
+    },
+  }
+  renderCarousel(fakeClient({ getBrandRevision: vi.fn(async () => brandIr) }))
+
+  await screen.findByRole("heading", { name: "Modo Carrossel" })
+  expect(screen.getByText(/versão clara ou escura adequada/)).toBeInTheDocument()
+
+  await user.click(screen.getByRole("button", { name: /Principal, #/ }))
+  await user.selectOptions(screen.getByLabelText("Versão da marca"), "logo.onDark")
+  await user.click(screen.getByRole("button", { name: "Aplicar este fundo aos 5 slides" }))
+  await user.click(screen.getByRole("button", { name: "Aplicar esta escolha aos 5 slides" }))
+  await user.click(screen.getByRole("button", { name: /02 Conteúdo/ }))
+
+  expect(screen.getByRole("button", { name: /Principal, #/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  )
+  expect(screen.getByLabelText("Versão da marca")).toHaveValue("logo.onDark")
+})
+
 it("envia quantidade, conteúdo e uma das seis posições de assinatura", async () => {
   const user = userEvent.setup()
   const createCarousel = vi.fn(async (input) => ({
@@ -78,7 +108,11 @@ it("envia quantidade, conteúdo e uma das seis posições de assinatura", async 
       profile: "post-4x5",
       signature: { text: "@acme", vertical: "top", horizontal: "right" },
       slides: expect.arrayContaining([
-        expect.objectContaining({ headline: "Abertura" }),
+        expect.objectContaining({
+          headline: "Abertura",
+          backgroundColorToken: null,
+          logoAssetToken: null,
+        }),
         expect.objectContaining({ headline: "Argumento" }),
         expect.objectContaining({ headline: "Conclusão" }),
       ]),

@@ -493,6 +493,8 @@ export interface CarouselSlideInput {
   headline: string
   textBlocks: string[]
   cta: string
+  backgroundColorToken?: string | null
+  logoAssetToken?: string | null
 }
 
 export interface CarouselSlide {
