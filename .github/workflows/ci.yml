@@ -12,7 +12,7 @@ jobs:
     name: Contrato de release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -28,7 +28,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
@@ -62,7 +62,7 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -96,7 +96,7 @@ jobs:
       run:
         working-directory: packages/engine
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -141,7 +141,7 @@ jobs:
       run:
         working-directory: packages/adapter-sdk-python
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -173,7 +173,7 @@ jobs:
       BRANDRT_TOKEN: release-ci-token
       BRANDRT_DB_PASSWORD: release-ci-password
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Validar e construir a distribuição self-hosted
         run: |
           docker compose config --quiet

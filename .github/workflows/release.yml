@@ -38,7 +38,7 @@ jobs:
       BRANDRT_TOKEN: release-e2e-token
       BRANDRT_DB_PASSWORD: release-e2e-password
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
