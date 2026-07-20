@@ -82,7 +82,13 @@ def _compile_identity(
         parsed = IdentityDraftValue.model_validate(value)
     except ValidationError as exc:
         raise CompileError("A leitura da identidade possui campos inválidos.") from exc
-    essence = parsed.essence.strip()
+    placeholders = {"-", "—", ".", "...", "n/a", "na", "não sei", "nao sei"}
+
+    def cleaned(value: str) -> str:
+        text = value.strip()
+        return "" if text.casefold() in placeholders else text
+
+    essence = cleaned(parsed.essence)
     if not essence:
         raise CompileError("Explique a essência ou o propósito da marca antes de publicar.")
     question = _question(draft, "identity.expression")
@@ -96,9 +102,9 @@ def _compile_identity(
     )
     return BrandIdentity(
         essence=essence,
-        personality=parsed.personality.strip(),
-        voice=parsed.voice.strip(),
-        avoid=parsed.avoid.strip(),
+        personality=cleaned(parsed.personality),
+        voice=cleaned(parsed.voice),
+        avoid=cleaned(parsed.avoid),
         evidence=[*inherited, _confirmation(created_at)],
     )
 

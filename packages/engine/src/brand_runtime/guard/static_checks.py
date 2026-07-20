@@ -12,7 +12,14 @@ from pydantic import Field
 
 from brand_runtime.colors import wcag_contrast
 from brand_runtime.ir.models import BrandIR, CamelModel
-from brand_runtime.kit.models import ContentSpec, ImageValue, LayoutSpec, Slot, TextValue
+from brand_runtime.kit.models import (
+    ContentSpec,
+    ImageValue,
+    LayoutSpec,
+    Slot,
+    TextValue,
+    materialize_content_layout,
+)
 
 _RASTER_FORMATS = {"PNG", "JPEG"}
 _TEXT_INK_COVERAGE = 0.1
@@ -955,14 +962,24 @@ def run_static_checks(
     assets_dir: Path,
 ) -> list[GuardCheck]:
     """Executa o verdict estático em ordem estável sem mutar nenhuma entrada."""
+    try:
+        active_layout = materialize_content_layout(layout, content)
+    except ValueError as exc:
+        return [
+            _blocked(
+                "added-elements-contract",
+                "Os elementos adicionados à peça entram em conflito com o modelo original.",
+                detail={"reason": str(exc)},
+            )
+        ]
     return [
-        *_contract_checks(ir, layout, content),
-        *_override_checks(ir, layout, content),
-        *_reference_checks(ir, layout),
-        *_presence_and_type_checks(layout, content),
-        *_text_length_checks(layout, content),
-        *_emphasis_checks(layout, content),
-        *_image_resolution_checks(layout, content, assets_dir),
-        *_accent_usage_checks(ir, layout, content),
-        *_contrast_checks(ir, layout, content),
+        *_contract_checks(ir, active_layout, content),
+        *_override_checks(ir, active_layout, content),
+        *_reference_checks(ir, active_layout),
+        *_presence_and_type_checks(active_layout, content),
+        *_text_length_checks(active_layout, content),
+        *_emphasis_checks(active_layout, content),
+        *_image_resolution_checks(active_layout, content, assets_dir),
+        *_accent_usage_checks(ir, active_layout, content),
+        *_contrast_checks(ir, active_layout, content),
     ]

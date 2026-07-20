@@ -28,10 +28,15 @@ const EMPTY_FIELDS: CampaignFields = {
   imageSha256: null,
 }
 
-function representativeLayouts(layouts: LayoutSpec[]): string[] {
+function layoutRequiresImage(layout: LayoutSpec): boolean {
+  return layout.slots.some((slot) => slot.kind === "image" && slot.required)
+}
+
+function representativeLayouts(layouts: LayoutSpec[], hasImage = false): string[] {
   const seen = new Set<string>()
   const selected: string[] = []
   for (const layout of layouts) {
+    if (!hasImage && layoutRequiresImage(layout)) continue
     if (seen.has(layout.profile)) continue
     seen.add(layout.profile)
     selected.push(layout.id)
@@ -53,10 +58,12 @@ function CampaignExportButton({
   piece,
   format,
   label,
+  blockedReason,
 }: {
   piece: CampaignPiece
   format: ExportFormat
   label: string
+  blockedReason?: string
 }): JSX.Element {
   const api = useApi()
   const [pending, setPending] = useState(false)
@@ -97,7 +104,13 @@ function CampaignExportButton({
   }
   return (
     <span className="campaign-export-control">
-      <button type="button" className="secondary-action" disabled={pending} onClick={exportPiece}>
+      <button
+        type="button"
+        className="secondary-action"
+        disabled={pending || Boolean(blockedReason)}
+        title={blockedReason}
+        onClick={exportPiece}
+      >
         {pending ? "Preparando…" : label}
       </button>
       {error ? <span role="alert">{error}</span> : null}
@@ -116,7 +129,13 @@ function CampaignPieceCard({
   brandIr: BrandIr
   assetsBaseUrl: string
 }): JSX.Element {
-  const guidance = piece.checks.filter((check) => check.status !== "pass")
+  const blockers = piece.checks.filter(
+    (check) => check.status === "blocked" || check.id === "required-slot",
+  )
+  const guidance = piece.checks.filter(
+    (check) => check.status !== "pass" && !blockers.includes(check),
+  )
+  const blockedReason = blockers[0]?.messagePt
   const finalFormat: ExportFormat = layout.profile === "doc-a4" ? "pdf" : "png"
   const editableFormat: ExportFormat = layout.profile === "doc-a4" ? "docx" : "pptx"
   return (
@@ -133,10 +152,15 @@ function CampaignPieceCard({
       <div className="campaign-piece-copy">
         <p className="product-kicker">{profileName(layout.profile)}</p>
         <h3>{layout.namePt}</h3>
-        {guidance.length ? (
+        {blockers.length ? (
+          <div className="campaign-piece-warning campaign-piece-blocked" role="alert">
+            <strong>Peça incompleta — exportação bloqueada</strong>
+            <span>{blockedReason}</span>
+          </div>
+        ) : guidance.length ? (
           <div className="campaign-piece-warning" role="status">
             <strong>{guidance.length} orientação(ões) da marca</strong>
-            <span>{guidance[0].messagePt} Você pode exportar assim mesmo.</span>
+            <span>{guidance[0].messagePt}</span>
           </div>
         ) : (
           <p className="campaign-piece-ready">Dentro da marca e pronta para exportar.</p>
@@ -146,11 +170,13 @@ function CampaignPieceCard({
             piece={piece}
             format={finalFormat}
             label={`Gerar ${finalFormat.toUpperCase()}`}
+            blockedReason={blockedReason}
           />
           <CampaignExportButton
             piece={piece}
             format={editableFormat}
             label={`Gerar ${editableFormat.toUpperCase()} editável`}
+            blockedReason={blockedReason}
           />
         </div>
       </div>
@@ -187,7 +213,7 @@ export function CampaignPage(): JSX.Element {
       .then(([brandIr, layouts, campaigns]) => {
         if (!current) return
         setData({ brandIr, layouts, campaigns })
-        setSelectedLayouts(representativeLayouts(layouts))
+        setSelectedLayouts(representativeLayouts(layouts, false))
       })
       .catch((reason: unknown) => {
         if (current) {
@@ -222,7 +248,7 @@ export function CampaignPage(): JSX.Element {
     setActive(null)
     setName("")
     setFields(EMPTY_FIELDS)
-    setSelectedLayouts(representativeLayouts(data?.layouts ?? []))
+    setSelectedLayouts(representativeLayouts(data?.layouts ?? [], false))
     setImageFile(null)
     setError(null)
     setStatus(null)
@@ -245,12 +271,28 @@ export function CampaignPage(): JSX.Element {
       setError("Dê um nome para reencontrar esta campanha.")
       return
     }
+    if (!data?.brandIr.creativeDirection) {
+      setError(
+        "Esta revisão ainda não tem direção criativa confiável. Refaça a leitura da marca antes de gerar peças.",
+      )
+      return
+    }
     if (!active && selectedLayouts.length === 0) {
       setError("Escolha ao menos um modelo para a campanha.")
       return
     }
     if (![fields.headline, fields.body, fields.cta, fields.date].some((value) => value.trim())) {
       setError("Escreva ao menos um título, mensagem, data ou chamada para a campanha.")
+      return
+    }
+    const hasImage = Boolean(imageFile || fields.imageSha256)
+    const incompatible = selectedLayouts
+      .map((layoutId) => layoutById.get(layoutId))
+      .find((layout) => layout && layoutRequiresImage(layout) && !hasImage)
+    if (incompatible) {
+      setError(
+        `O modelo “${incompatible.namePt}” precisa de uma imagem. Envie uma foto ou escolha um modelo sem imagem.`,
+      )
       return
     }
     setPending(true)
@@ -316,6 +358,8 @@ export function CampaignPage(): JSX.Element {
   }
 
   const assetsBaseUrl = api.revisionAssetsBaseUrl(revisionId)
+  const hasCreativeDirection = Boolean(data.brandIr.creativeDirection)
+  const hasCampaignImage = Boolean(imageFile || fields.imageSha256)
   return (
     <main
       id="main-content"
@@ -394,6 +438,16 @@ export function CampaignPage(): JSX.Element {
               void save()
             }}
           >
+            {!hasCreativeDirection ? (
+              <div className="campaign-direction-blocker" role="alert">
+                <strong>Esta marca ainda não está pronta para gerar campanhas.</strong>
+                <span>
+                  A leitura anterior não encontrou direção criativa suficiente. Volte ao início,
+                  envie o manual novamente e confira as pistas que o Molda extrair.
+                </span>
+                <Link className="text-action" to="/">Refazer leitura da marca</Link>
+              </div>
+            ) : null}
             <label htmlFor="campaign-name">Nome da campanha</label>
             <input
               id="campaign-name"
@@ -461,14 +515,25 @@ export function CampaignPage(): JSX.Element {
                 name="campaign-image"
                 type="file"
                 accept="image/png,image/jpeg"
-                onChange={(event) => setImageFile(event.currentTarget.files?.[0] ?? null)}
+                onChange={(event) => {
+                  const next = event.currentTarget.files?.[0] ?? null
+                  setImageFile(next)
+                  if (!next && !fields.imageSha256) {
+                    setSelectedLayouts((current) =>
+                      current.filter((layoutId) => {
+                        const layout = layoutById.get(layoutId)
+                        return !layout || !layoutRequiresImage(layout)
+                      }),
+                    )
+                  }
+                }}
               />
               <p className="field-guidance">
                 {imageFile
                   ? `Nova imagem: ${imageFile.name}`
                   : fields.imageSha256
                     ? "A campanha já tem uma imagem."
-                    : "PNG ou JPEG. Formatos sem imagem continuam funcionando."}
+                    : "PNG ou JPEG. Modelos que dependem de fotografia ficam indisponíveis sem uma imagem."}
               </p>
               {fields.imageSha256 || imageFile ? (
                 <button
@@ -477,6 +542,12 @@ export function CampaignPage(): JSX.Element {
                   onClick={() => {
                     setImageFile(null)
                     changeField("imageSha256", null)
+                    setSelectedLayouts((current) =>
+                      current.filter((layoutId) => {
+                        const layout = layoutById.get(layoutId)
+                        return !layout || !layoutRequiresImage(layout)
+                      }),
+                    )
                   }}
                 >
                   Remover imagem
@@ -499,11 +570,17 @@ export function CampaignPage(): JSX.Element {
                       name="campaign-layout"
                       value={layout.id}
                       checked={selectedLayouts.includes(layout.id)}
+                      disabled={layoutRequiresImage(layout) && !hasCampaignImage}
                       onChange={changeLayout}
                     />
                     <span>
                       {layout.namePt}
-                      <small>{profileName(layout.profile)}</small>
+                      <small>
+                        {profileName(layout.profile)}
+                        {layoutRequiresImage(layout) && !hasCampaignImage
+                          ? " · precisa de imagem"
+                          : ""}
+                      </small>
                     </span>
                   </label>
                 ))}
@@ -512,7 +589,11 @@ export function CampaignPage(): JSX.Element {
 
             {error ? <p className="campaign-error" role="alert">{error}</p> : null}
             {status ? <p className="campaign-status" role="status" aria-live="polite">{status}</p> : null}
-            <button type="submit" className="primary-action" disabled={pending}>
+            <button
+              type="submit"
+              className="primary-action"
+              disabled={pending || !hasCreativeDirection}
+            >
               {pending
                 ? "Atualizando todas as peças…"
                 : active

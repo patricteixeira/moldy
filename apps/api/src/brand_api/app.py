@@ -14,6 +14,7 @@ from brand_api.fonts.models import FontResolver
 from brand_api.models import Base, InviteToken
 from brand_api.routes.assets import router as assets_router
 from brand_api.routes.campaigns import router as campaigns_router
+from brand_api.routes.carousels import router as carousels_router
 from brand_api.routes.documents import router as documents_router
 from brand_api.routes.docx_branding import router as docx_branding_router
 from brand_api.routes.intake import router as intake_router
@@ -21,6 +22,8 @@ from brand_api.routes.jobs import router as jobs_router
 from brand_api.routes.revisions import router as revisions_router
 from brand_api.routes.roundtrip import router as roundtrip_router
 from brand_api.storage import Storage
+from brand_api.translation import build_identity_translator
+from brand_runtime.intake.translation import IdentityTranslator
 
 
 def _create_data_directories(settings: Settings) -> None:
@@ -49,7 +52,12 @@ def _seed_bootstrap_token(session_factory, token: str | None) -> None:
         session.commit()
 
 
-def create_app(settings: Settings, *, font_resolver: FontResolver | None = None) -> FastAPI:
+def create_app(
+    settings: Settings,
+    *,
+    font_resolver: FontResolver | None = None,
+    identity_translator: IdentityTranslator | None = None,
+) -> FastAPI:
     """Constrói a app, o schema conhecido, o storage e suas dependências."""
     _create_data_directories(settings)
     engine = make_engine(settings.database_url)
@@ -68,6 +76,11 @@ def create_app(settings: Settings, *, font_resolver: FontResolver | None = None)
         if font_resolver is not None
         else build_font_resolver(settings.font_fetch_base_url)
     )
+    app.state.identity_translator = (
+        identity_translator
+        if identity_translator is not None
+        else build_identity_translator(settings.translation_model_dir)
+    )
     if settings.fake_exporter:
         app.state.exporter = FakeExporter()
 
@@ -85,6 +98,7 @@ def create_app(settings: Settings, *, font_resolver: FontResolver | None = None)
     app.include_router(revisions_router)
     app.include_router(assets_router)
     app.include_router(campaigns_router)
+    app.include_router(carousels_router)
     app.include_router(documents_router)
     app.include_router(docx_branding_router)
     app.include_router(jobs_router)

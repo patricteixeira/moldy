@@ -8,13 +8,19 @@ it("placeholder é determinístico, PT-BR e respeita maxChars", () => {
   const b = placeholderContent(layout, "brandrev_x")
   expect(a).toEqual(b)
   expect(a.layoutId).toBe(layout.id)
-  expect(a.values.headline).toEqual({ kind: "text", text: "Sua mensagem aqui" })
+  expect(a.values.headline).toEqual({ kind: "text", text: "Sua marca em movimento." })
   expect(a.values).not.toHaveProperty("logo")
+  expect(a.addedSlots?.map((slot) => slot.id)).toEqual([
+    "user-kicker-1",
+    "user-signature-1",
+    "user-support-1",
+  ])
+  expect(a.addedLayers?.map((layer) => layer.id)).toEqual(["user-rule-1"])
 
   layout.slots[0].maxChars = 4
   expect(placeholderContent(layout, "brandrev_x").values.headline).toEqual({
     kind: "text",
-    text: "Sua ",
+    text: "Sua…",
   })
 })
 
@@ -37,7 +43,7 @@ it("arquétipo editorial nasce com texto autoral e destaque válido", () => {
       emphasis: "INTENÇÃO E FORMA",
     },
     index: { kind: "text", text: "06" },
-    signature: { kind: "text", text: "@sua-marca" },
+    signature: { kind: "text", text: "@suamarca" },
   })
 })
 
@@ -49,6 +55,6 @@ it("corte editorial remove destaque quando a palavra inteira não cabe", () => {
 
   expect(placeholderContent(layout, "brandrev_x").values.headline).toEqual({
     kind: "text",
-    text: "É A COERÊNCI",
+    text: "É A COERÊNC…",
   })
 })

@@ -29,6 +29,7 @@ from brand_runtime.intake.base import Candidate
 from brand_runtime.intake.dtcg import load_dtcg
 from brand_runtime.intake.fonts import introspect_font
 from brand_runtime.intake.identity import identity_candidate
+from brand_runtime.intake.translation import IdentityTranslator, translate_identity_candidate
 from brand_runtime.intake.pdf_colors import extract_pdf_colors, extract_pdf_declared_colors
 from brand_runtime.intake.pdf_composition import (
     CompositionDeclarations,
@@ -586,7 +587,11 @@ def _diagnostics(
     return diagnostics
 
 
-def build_draft(package_dir: Path) -> BrandDraft:
+def build_draft(
+    package_dir: Path,
+    *,
+    translator: IdentityTranslator | None = None,
+) -> BrandDraft:
     """Extrai evidências do pacote informal e monta as perguntas do wizard.
 
     Convenção do pacote: PDFs de diretrizes em ``*.pdf`` na raiz ou em
@@ -622,7 +627,7 @@ def build_draft(package_dir: Path) -> BrandDraft:
     composition_declarations = merge_composition_declarations(
         [extract_pdf_composition(path) for path in pdfs]
     )
-    expression_candidate = identity_candidate(pdfs)
+    expression_candidate = translate_identity_candidate(identity_candidate(pdfs), translator)
 
     dtcg = _dtcg_candidates(package_dir)
     dtcg_colors = [c for key, c in dtcg.items() if key.startswith("color.")]

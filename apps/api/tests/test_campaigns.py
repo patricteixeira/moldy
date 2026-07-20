@@ -47,6 +47,7 @@ def test_campaign_create_update_propagates_transactionally(client, compiled, db)
     assert social["content"]["values"]["headline"]["text"] == "Semana de lançamento"
     assert "24 de julho · Conheça agora" in social["content"]["values"]["body"]["text"]
     assert social["content"]["values"]["photo"]["sha256"] == image_sha256
+    assert {"headline", "logo"}.issubset(social["content"]["overrides"])
     assert all(check["status"] != "blocked" for check in social["checks"])
 
     response = client.patch(
@@ -102,6 +103,10 @@ def test_campaign_validates_image_layouts_and_auth(client, anon, compiled):
     )
 
     no_image = {**base, "fields": {**base["fields"], "imageSha256": None}}
+    incomplete_photo_layout = client.post("/v1/campaigns", json=no_image)
+    assert incomplete_photo_layout.status_code == 422
+    assert "precisa de uma imagem" in incomplete_photo_layout.json()["detail"]
+
     duplicated = client.post(
         "/v1/campaigns",
         json={**no_image, "layoutIds": ["statement-post-1x1", "statement-post-1x1"]},

@@ -11,8 +11,10 @@ from brand_runtime.intake.compile import Answers, CompileError, compile_ir
 from brand_runtime.intake.draft import BrandDraft, build_draft
 from brand_runtime.ir.models import BrandIR
 from brand_runtime.ir.schema import export_schemas
+from brand_runtime.kit.carousel import CarouselProfile, generate_carousel_layouts
+from brand_runtime.kit.direction import apply_creative_direction, suggested_surface
 from brand_runtime.kit.generator import KitGenerationError, generate_kit
-from brand_runtime.kit.models import ContentSpec, LayoutSpec
+from brand_runtime.kit.models import ContentSpec, LayoutSpec, materialize_content_layout
 from brand_runtime.native import (
     canonical_ooxml_manifest,
     derive_branded_template,
@@ -44,6 +46,7 @@ __all__ = [
     "BrandDraft",
     "BrandIR",
     "BrandPackageManifest",
+    "CarouselProfile",
     "CompileError",
     "ContentSpec",
     "DocumentGraph",
@@ -59,6 +62,7 @@ __all__ = [
     "PackageValidationReport",
     "RoundtripReport",
     "analyze_docx_brand",
+    "apply_creative_direction",
     "apply_docx_brand_plan",
     "apply_pptx_fix_plan",
     "build_draft",
@@ -68,13 +72,16 @@ __all__ = [
     "derive_branded_template",
     "export_schemas",
     "generate_kit",
+    "generate_carousel_layouts",
     "inspect_semantic_shapes",
     "lint_roundtrip",
+    "materialize_content_layout",
     "parse_pptx_document_graph",
     "render_docx",
     "render_native_preview",
     "render_pptx",
     "run_static_checks",
+    "suggested_surface",
     "validate_ooxml",
     "validate_brand_package",
 ]

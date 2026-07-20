@@ -11,6 +11,32 @@ def _post_zip(client, data: bytes):
     )
 
 
+def _english_identity_package() -> bytes:
+    import pymupdf
+
+    with pymupdf.open() as document:
+        page = document.new_page(width=595, height=842)
+        page.insert_text((40, 60), "E S S E N C E & P O S I T I O N I N G", fontsize=12)
+        page.insert_textbox(
+            pymupdf.Rect(40, 90, 555, 190),
+            "A quiet house. The brand exists to make complex things clear.",
+            fontname="helv",
+            fontsize=12,
+        )
+        page.insert_text((40, 230), "V O I C E & T O N E", fontsize=12)
+        page.insert_textbox(
+            pymupdf.Rect(40, 260, 555, 360),
+            "Short, declarative sentences. Never use urgency or discount language.",
+            fontname="helv",
+            fontsize=12,
+        )
+        pdf = document.tobytes()
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("manual.pdf", pdf)
+    return output.getvalue()
+
+
 def _declared_package(package_zip: bytes, *, bad_hash: bool = False) -> bytes:
     source = io.BytesIO(package_zip)
     output = io.BytesIO()
@@ -71,6 +97,36 @@ def test_import_cria_draft_com_perguntas(client, package_zip):
         assert required in ids
     assert all(not question["required"] or question["candidates"] for question in body["questions"])
     assert body["ignoredEntries"] == []
+
+
+def test_import_traduz_identidade_localmente_e_persiste_original(make_client):
+    from brand_api.models import Draft
+
+    class FakeLocalTranslator:
+        identifier = "fake-local"
+
+        def translate(self, text: str, *, field: str) -> str:
+            return f"PT: {text}"
+
+    client = make_client(identity_translator=FakeLocalTranslator())
+    response = _post_zip(client, _english_identity_package())
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    question = next(item for item in body["questions"] if item["id"] == "identity.expression")
+    value = question["candidates"][0]["value"]
+    assert value["translationStatus"] == "translated"
+    assert value["sourceLanguage"] == "en"
+    assert value["displayLanguage"] == "pt-BR"
+    assert value["essence"].startswith("PT: ")
+    assert value["original"]["essence"].startswith("A quiet house")
+
+    with client.app.state.session_factory() as session:
+        stored = session.get(Draft, body["draftId"])
+        stored_question = next(
+            item for item in stored.draft["questions"] if item["id"] == "identity.expression"
+        )
+    assert stored_question["candidates"][0]["value"] == value
 
 
 def test_import_aceita_brand_package_de_adapter_com_integridade(client, package_zip):

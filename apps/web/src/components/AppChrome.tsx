@@ -4,14 +4,14 @@ import { Link, useLocation } from "react-router-dom"
 export function AppChrome({ children }: PropsWithChildren) {
   const { pathname } = useLocation()
   const editorMatch = pathname.match(/^\/marcas\/([^/]+)\/editor\//)
-  const revisionAreaMatch = pathname.match(/^\/marcas\/([^/]+)\/(kit|campanhas|word)$/)
+  const revisionAreaMatch = pathname.match(/^\/marcas\/([^/]+)\/(kit|carrossel|word)$/)
   const revisionId = revisionAreaMatch?.[1]
   const area = revisionAreaMatch?.[2]
   const currentArea =
     area === "kit"
       ? "Kit"
-      : area === "campanhas"
-        ? "Campanhas"
+      : area === "carrossel"
+        ? "Carrossel"
         : area === "word"
           ? "Word"
           : pathname === "/"

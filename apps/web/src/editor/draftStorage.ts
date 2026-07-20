@@ -1,4 +1,11 @@
-import type { LayerOverride, LayoutSpec, SlotValue, SurfaceStyle } from "../api/types"
+import type {
+  LayerOverride,
+  LayoutSpec,
+  ShapeLayer,
+  Slot,
+  SlotValue,
+  SurfaceStyle,
+} from "../api/types"
 
 const STORAGE_PREFIX = "brand-runtime:editor-draft:v1"
 
@@ -6,13 +13,17 @@ export interface EditorDraftState {
   values: Record<string, SlotValue>
   overrides: Record<string, LayerOverride>
   surface: SurfaceStyle | null
+  addedSlots: Slot[]
+  addedLayers: ShapeLayer[]
 }
 
 interface StoredEditorDraft {
-  version: 3
+  version: 4
   values: Record<string, SlotValue>
   overrides: Record<string, LayerOverride>
   surface: SurfaceStyle | null
+  addedSlots: Slot[]
+  addedLayers: ShapeLayer[]
 }
 
 function storageKey(revisionId: string, layoutId: string): string {
@@ -50,21 +61,66 @@ function validValueForSlot(value: unknown, kind: "text" | "image" | "logo"): val
   return false
 }
 
+function validArea(value: unknown): value is [number, number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((item) => typeof item === "number" && Number.isFinite(item)) &&
+    value[2] > 0 &&
+    value[3] > 0
+  )
+}
+
+function validAddedSlot(value: unknown): value is Slot {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id.startsWith("user-")) {
+    return false
+  }
+  return (
+    ["text", "image", "logo"].includes(String(value.kind)) &&
+    validArea(value.area) &&
+    (value.kind !== "text" || typeof value.role === "string")
+  )
+}
+
+function validAddedLayer(value: unknown): value is ShapeLayer {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    value.id.startsWith("user-") &&
+    value.kind === "shape" &&
+    (value.shape === "rectangle" || value.shape === "circle") &&
+    validArea(value.area) &&
+    typeof value.colorToken === "string"
+  )
+}
+
 export function loadEditorDraft(revisionId: string, layout: LayoutSpec): EditorDraftState {
   try {
     const serialized = window.localStorage.getItem(storageKey(revisionId, layout.id))
-    if (!serialized) return { values: {}, overrides: {}, surface: null }
+    if (!serialized) {
+      return { values: {}, overrides: {}, surface: null, addedSlots: [], addedLayers: [] }
+    }
 
     const parsed: unknown = JSON.parse(serialized)
     if (
       !isRecord(parsed) ||
-      (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) ||
+      ![1, 2, 3, 4].includes(Number(parsed.version)) ||
       !isRecord(parsed.values)
     ) {
-      return { values: {}, overrides: {}, surface: null }
+      return { values: {}, overrides: {}, surface: null, addedSlots: [], addedLayers: [] }
     }
 
-    const slots = new Map(layout.slots.map((slot) => [slot.id, slot.kind]))
+    const addedSlots =
+      parsed.version === 4 && Array.isArray(parsed.addedSlots)
+        ? parsed.addedSlots.filter(validAddedSlot)
+        : []
+    const addedLayers =
+      parsed.version === 4 && Array.isArray(parsed.addedLayers)
+        ? parsed.addedLayers.filter(validAddedLayer)
+        : []
+    const slots = new Map(
+      [...layout.slots, ...addedSlots].map((slot) => [slot.id, slot.kind]),
+    )
     const restored: Record<string, SlotValue> = {}
     for (const [slotId, value] of Object.entries(parsed.values)) {
       const kind = slots.get(slotId)
@@ -73,9 +129,14 @@ export function loadEditorDraft(revisionId: string, layout: LayoutSpec): EditorD
     const elementIds = new Set([
       ...layout.slots.map((slot) => slot.id),
       ...(layout.lockedLayers ?? []).map((layer) => layer.id),
+      ...addedSlots.map((slot) => slot.id),
+      ...addedLayers.map((layer) => layer.id),
     ])
     const overrides: Record<string, LayerOverride> = {}
-    if ((parsed.version === 2 || parsed.version === 3) && isRecord(parsed.overrides)) {
+    if (
+      (parsed.version === 2 || parsed.version === 3 || parsed.version === 4) &&
+      isRecord(parsed.overrides)
+    ) {
       for (const [elementId, value] of Object.entries(parsed.overrides)) {
         if (elementIds.has(elementId) && isRecord(value)) {
           overrides[elementId] = value as LayerOverride
@@ -83,12 +144,13 @@ export function loadEditorDraft(revisionId: string, layout: LayoutSpec): EditorD
       }
     }
     const surface =
-      parsed.version === 3 && (parsed.surface === null || isRecord(parsed.surface))
+      (parsed.version === 3 || parsed.version === 4) &&
+      (parsed.surface === null || isRecord(parsed.surface))
         ? (parsed.surface as SurfaceStyle | null)
         : null
-    return { values: restored, overrides, surface }
+    return { values: restored, overrides, surface, addedSlots, addedLayers }
   } catch {
-    return { values: {}, overrides: {}, surface: null }
+    return { values: {}, overrides: {}, surface: null, addedSlots: [], addedLayers: [] }
   }
 }
 
@@ -98,15 +160,30 @@ export function saveEditorDraft(
   values: Record<string, SlotValue>,
   overrides: Record<string, LayerOverride>,
   surface: SurfaceStyle | null = null,
+  addedSlots: Slot[] = [],
+  addedLayers: ShapeLayer[] = [],
 ): boolean {
   try {
     const key = storageKey(revisionId, layoutId)
-    if (Object.keys(values).length === 0 && Object.keys(overrides).length === 0 && !surface) {
+    if (
+      Object.keys(values).length === 0 &&
+      Object.keys(overrides).length === 0 &&
+      !surface &&
+      addedSlots.length === 0 &&
+      addedLayers.length === 0
+    ) {
       window.localStorage.removeItem(key)
       return true
     }
 
-    const payload: StoredEditorDraft = { version: 3, values, overrides, surface }
+    const payload: StoredEditorDraft = {
+      version: 4,
+      values,
+      overrides,
+      surface,
+      addedSlots,
+      addedLayers,
+    }
     window.localStorage.setItem(key, JSON.stringify(payload))
     return true
   } catch {

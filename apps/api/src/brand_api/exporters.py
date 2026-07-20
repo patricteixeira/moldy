@@ -25,6 +25,7 @@ from brand_runtime import (
     render_docx,
     render_pptx,
     run_static_checks,
+    materialize_content_layout,
     validate_ooxml,
 )
 
@@ -158,9 +159,10 @@ class NativeOfficeExporter:
         checks = run_static_checks(ir, layout, content, assets_dir)
         if any(check.status == "blocked" for check in checks):
             raise ExportRejected(checks)
+        active_layout = materialize_content_layout(layout, content)
 
         version = native_template_version or CURRENT_NATIVE_TEMPLATE_VERSION
-        template = self.registry.resolve(fmt, layout, version=version)
+        template = self.registry.resolve(fmt, active_layout, version=version)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         handle, temporary_name = tempfile.mkstemp(
             prefix=f".template-{template.version}-",
@@ -177,7 +179,7 @@ class NativeOfficeExporter:
                     branded_template,
                     out_path,
                     native_ir,
-                    layout,
+                    active_layout,
                     content,
                     asset_root=assets_dir,
                     native_layout_name=template.native_layout_name,
@@ -187,7 +189,7 @@ class NativeOfficeExporter:
                     branded_template,
                     out_path,
                     native_ir,
-                    layout,
+                    active_layout,
                     content,
                     asset_root=assets_dir,
                 )

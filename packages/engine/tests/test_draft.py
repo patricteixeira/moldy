@@ -62,6 +62,103 @@ def test_identity_question_preserves_manual_meaning_as_editable_evidence(tmp_pat
     assert {item.page for item in question.candidates[0].evidence} == {1}
 
 
+def test_identity_question_reads_english_letterspaced_sections_and_their_following_blocks(
+    tmp_path,
+):
+    package = tmp_path / "english-brand-package"
+    package.mkdir()
+    manual = package / "manual.pdf"
+    with pymupdf.open() as document:
+        essence = document.new_page(width=595, height=842)
+        essence.insert_text((40, 60), "E S S E N C E & P O S I T I O N I N G", fontsize=12)
+        essence.insert_textbox(
+            pymupdf.Rect(40, 90, 555, 210),
+            "A quiet architectural house built on tension between light and shadow.",
+            fontname="helv",
+            fontsize=12,
+        )
+        essence.insert_text((40, 250), "T H E R E G I S T E R", fontsize=12)
+        essence.insert_textbox(
+            pymupdf.Rect(40, 280, 555, 400),
+            "Sophisticated, intellectual and monumental; never maximalist.",
+            fontname="helv",
+            fontsize=12,
+        )
+
+        voice = document.new_page(width=595, height=842)
+        voice.insert_text((40, 60), "V O I C E & T O N E", fontsize=12)
+        voice.insert_textbox(
+            pymupdf.Rect(40, 90, 555, 210),
+            "Short declarative sentences. Material-first and atmospheric.",
+            fontname="helv",
+            fontsize=12,
+        )
+        voice.insert_text((40, 250), "N E V E R", fontsize=12)
+        voice.insert_textbox(
+            pymupdf.Rect(40, 280, 555, 400),
+            "Exclamation marks, emoji, urgency or discount language.",
+            fontname="helv",
+            fontsize=12,
+        )
+        document.save(manual)
+
+    draft = build_draft(package)
+    question = next(item for item in draft.questions if item.id == "identity.expression")
+    value = question.candidates[0].value
+
+    assert "quiet architectural" in value["essence"]
+    assert "Sophisticated" in value["personality"]
+    assert "Material-first" in value["voice"]
+    assert "discount language" in value["avoid"]
+    assert {item.page for item in question.candidates[0].evidence} == {1, 2}
+
+
+def test_identity_question_ignores_contents_page_and_editorial_scaffolding(tmp_path):
+    package = tmp_path / "manual-with-contents"
+    package.mkdir()
+    manual = package / "manual.pdf"
+    with pymupdf.open() as document:
+        contents = document.new_page(width=595, height=842)
+        contents.insert_textbox(
+            pymupdf.Rect(40, 40, 555, 220),
+            "CONTENTS\nESSENCE & POSITIONING 01\nTHE LOGO SYSTEM 02\n"
+            "COLOUR 03\nVOICE & TONE 04\nUSAGE & MISUSE 05",
+            fontname="helv",
+            fontsize=12,
+        )
+        essence = document.new_page(width=595, height=842)
+        essence.insert_textbox(
+            pymupdf.Rect(40, 40, 555, 100),
+            "0 1 — E S S E N C E & P O S I T I O N I N G\nA QUIET HOUSE",
+            fontname="helv",
+            fontsize=12,
+        )
+        essence.insert_textbox(
+            pymupdf.Rect(40, 120, 555, 220),
+            "The house is controlled, silent and sophisticated.",
+            fontname="helv",
+            fontsize=12,
+        )
+        essence.insert_text((40, 260), "T H E R E G I S T E R", fontsize=12)
+        essence.insert_textbox(
+            pymupdf.Rect(40, 290, 555, 390),
+            "Monumental, not maximalist: few elements, elevated impact.",
+            fontname="helv",
+            fontsize=12,
+        )
+        document.save(manual)
+
+    draft = build_draft(package)
+    question = next(item for item in draft.questions if item.id == "identity.expression")
+    value = question.candidates[0].value
+
+    assert "THE LOGO SYSTEM" not in value["essence"]
+    assert "A QUIET HOUSE" in value["essence"]
+    assert "controlled, silent" in value["essence"]
+    assert "T H E R E G I S T E R" not in value["personality"]
+    assert "Monumental, not maximalist" in value["personality"]
+
+
 def test_legacy_draft_without_recommended_count_remains_valid(brand_package):
     payload = build_draft(brand_package).model_dump(mode="json", by_alias=True)
     for question in payload["questions"]:

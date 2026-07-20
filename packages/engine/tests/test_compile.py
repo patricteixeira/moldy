@@ -162,6 +162,22 @@ def test_weak_semantic_signal_is_preserved_without_inventing_a_direction(brand_p
     assert any(item.code == "IDENTITY_SIGNAL_WEAK" for item in ir.diagnostics)
 
 
+def test_placeholder_is_not_accepted_as_brand_essence(brand_package):
+    draft = build_draft(brand_package)
+    answers = _answers(draft)
+    answers.values["identity.expression"] = {
+        "essence": "-",
+        "personality": "-",
+        "voice": "-",
+        "avoid": "-",
+    }
+
+    with pytest.raises(CompileError) as exc:
+        compile_ir(draft, answers, "ACME", created_at=FIXED)
+
+    assert "essência" in str(exc.value)
+
+
 def test_happy_path_produces_valid_ir(brand_package):
     draft = build_draft(brand_package)
     ir = compile_ir(draft, _answers(draft), "ACME", created_at=FIXED)

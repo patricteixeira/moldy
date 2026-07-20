@@ -1,7 +1,7 @@
 import { lazy, Suspense } from "react"
 import { Link, Route, Routes } from "react-router-dom"
 import { AppChrome } from "./components/AppChrome"
-import { CampaignPage } from "./campaign/CampaignPage"
+import { CarouselPage } from "./carousel/CarouselPage"
 import { DocxBrandPage } from "./docx/DocxBrandPage"
 import { EditorPage } from "./editor/EditorPage"
 import { KitPage } from "./kit/KitPage"
@@ -22,7 +22,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<WizardPage />} />
             <Route path="/marcas/:revisionId/kit" element={<KitPage />} />
-            <Route path="/marcas/:revisionId/campanhas" element={<CampaignPage />} />
+            <Route path="/marcas/:revisionId/carrossel" element={<CarouselPage />} />
             <Route path="/marcas/:revisionId/word" element={<DocxBrandPage />} />
             <Route path="/marcas/:revisionId/editor/:layoutId" element={<EditorPage />} />
             <Route

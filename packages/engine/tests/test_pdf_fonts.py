@@ -88,6 +88,33 @@ def test_extracts_letterspaced_inline_role_declarations(tmp_path):
     assert ("Nunito Sans", 400) in body
 
 
+def test_extracts_letterspaced_families_after_em_dash_without_using_tracking_as_font(
+    tmp_path,
+):
+    pdf_path = tmp_path / "tipografia-em-dash.pdf"
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        page.insert_textbox(
+            pymupdf.Rect(40, 40, 550, 760),
+            "D I S P L A Y & U I — A R C H I V O\n"
+            "WEIGHTS\n100–900\nUSE\nHEADLINES · WORDMARK · CAPS LABELS\n"
+            "B O D Y — H A N K E N G R O T E S K\n"
+            "BODY\n11.5PT / 1.6\nCAPS TRACKING\n.18EM–.32EM",
+            fontsize=12,
+        )
+        doc.save(pdf_path)
+
+    declared = extract_pdf_declared_fonts(pdf_path)
+
+    assert declared["heading"][0].value["family"] == "Archivo"
+    assert declared["body"][0].value["family"] == "Hanken Grotesk"
+    assert all(
+        candidate.value["family"] != "CAPS TRACKING"
+        for candidates in declared.values()
+        for candidate in candidates
+    )
+
+
 def test_embedded_resource_recovers_real_family_when_span_name_is_false(tmp_path, fixture_font):
     renamed_font = tmp_path / "clash-subset.ttf"
     with TTFont(fixture_font) as font:

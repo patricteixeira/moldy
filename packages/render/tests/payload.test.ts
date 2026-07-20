@@ -529,3 +529,26 @@ it("ênfase vazia ou sem binding é inválida, mas texto em edição pode não c
   };
   expect(parsePayload(editing)).toBe(editing);
 });
+
+it("aceita elementos do documento quando também estão materializados no layout", () => {
+  const payload = compositionPayload();
+  const added = {
+    id: "user-text-1",
+    kind: "text" as const,
+    role: "body",
+    area: [48, 760, 520, 120] as [number, number, number, number],
+    fit: "shrink-within-role-range" as const,
+    required: false,
+    zIndex: 8,
+  };
+  payload.layoutSpec.slots.push(added);
+  payload.contentSpec.addedSlots = [added];
+  payload.contentSpec.addedLayers = [];
+  payload.contentSpec.values[added.id] = { kind: "text", text: "Bloco adicional" };
+
+  expect(parsePayload(payload)).toBe(payload);
+
+  const missing = compositionPayload();
+  missing.contentSpec.addedSlots = [added];
+  expect(() => parsePayload(missing)).toThrowError(/não está materializado/i);
+});

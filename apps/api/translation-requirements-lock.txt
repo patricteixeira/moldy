@@ -1,0 +1,5 @@
+ctranslate2==4.8.1
+numpy==2.5.1
+PyYAML==6.0.3
+sentencepiece==0.2.2
+setuptools==83.0.0

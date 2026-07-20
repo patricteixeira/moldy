@@ -2,6 +2,7 @@ import type {
   ApiClient,
   BrandIr,
   Campaign,
+  Carousel,
   ContentSpec,
   JobInfo,
   GuardCheck,
@@ -121,6 +122,26 @@ export function createApiClient(fetchFn: typeof fetch = fetch): ApiClient {
       return json<Campaign>(`/v1/campaigns/${encodeURIComponent(campaignId)}`, {
         method: "PATCH",
         body: JSON.stringify(input),
+      })
+    },
+    listCarousels(revisionId) {
+      return json<Carousel[]>(
+        `/v1/brand-revisions/${encodeURIComponent(revisionId)}/carousels`,
+      )
+    },
+    getCarousel(carouselId) {
+      return json<Carousel>(`/v1/carousels/${encodeURIComponent(carouselId)}`)
+    },
+    createCarousel(input) {
+      return json<Carousel>("/v1/carousels", {
+        method: "POST",
+        body: JSON.stringify(input),
+      })
+    },
+    requestCarouselExport(carouselId) {
+      return json(`/v1/carousels/${encodeURIComponent(carouselId)}/exports`, {
+        method: "POST",
+        body: JSON.stringify({ format: "png" }),
       })
     },
     async uploadAsset(file) {

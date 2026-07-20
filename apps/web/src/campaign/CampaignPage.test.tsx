@@ -3,9 +3,60 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { expect, it, vi } from "vitest"
 import { ApiProvider } from "../api/context"
-import type { ApiClient } from "../api/types"
-import { fakeCampaign, fakeClient, fakeStatementLayout } from "../test/fakeApi"
+import type { ApiClient, BrandIr, LayoutSpec } from "../api/types"
+import { FAKE_IR, fakeCampaign, fakeClient, fakeStatementLayout } from "../test/fakeApi"
 import { CampaignPage } from "./CampaignPage"
+
+const axis = { value: 0.5, confidence: 0.75, evidenceTerms: ["precisa", "ousada"] }
+const DIRECTED_IR: BrandIr = {
+  ...FAKE_IR,
+  schemaVersion: "0.4.0",
+  identity: {
+    essence: "Clareza para criar.",
+    personality: "Precisa e ousada.",
+    voice: "Direta.",
+    avoid: "Ruído.",
+    evidence: [],
+  },
+  creativeDirection: {
+    energy: axis,
+    geometry: axis,
+    density: axis,
+    formality: axis,
+    materiality: axis,
+    contrast: axis,
+    composition: "expansive",
+    surface: "linear-rhythm",
+    scaleContrast: 0.7,
+    negativeSpace: 0.4,
+    bleed: 0.6,
+    surfaceDensity: 0.45,
+    rationalePt: ["A marca pede contraste de escala."],
+  },
+}
+
+function campaignClient(overrides: Partial<ApiClient> = {}): ApiClient {
+  return fakeClient({ getBrandRevision: vi.fn(async () => DIRECTED_IR), ...overrides })
+}
+
+function fakePhotoLayout(): LayoutSpec {
+  return {
+    ...fakeStatementLayout(),
+    id: "announce-post-1x1",
+    namePt: "Anúncio com foto",
+    slots: [
+      ...fakeStatementLayout().slots,
+      {
+        id: "photo",
+        kind: "image",
+        required: true,
+        area: [0, 700, 1080, 380],
+        fit: "fixed",
+        minResolution: [1080, 380],
+      },
+    ],
+  }
+}
 
 function renderCampaign(client: ApiClient) {
   render(
@@ -26,7 +77,7 @@ it("cria uma fonte única e exibe a peça vinculada", async () => {
     fields: input.fields,
   }))
   renderCampaign(
-    fakeClient({
+    campaignClient({
       getKit: vi.fn(async () => [fakeStatementLayout()]),
       createCampaign,
     }),
@@ -76,7 +127,7 @@ it("reabre uma campanha e atualiza os mesmos documentos", async () => {
     fields: input.fields,
   }))
   renderCampaign(
-    fakeClient({
+    campaignClient({
       getKit: vi.fn(async () => [fakeStatementLayout()]),
       listCampaigns: vi.fn(async () => [existing]),
       updateCampaign,
@@ -94,5 +145,37 @@ it("reabre uma campanha e atualiza os mesmos documentos", async () => {
     expect.objectContaining({
       fields: expect.objectContaining({ headline: "Título atualizado" }),
     }),
+  )
+})
+
+it("não oferece layout com foto enquanto a campanha não tem imagem", async () => {
+  renderCampaign(
+    campaignClient({
+      getKit: vi.fn(async () => [fakePhotoLayout(), fakeStatementLayout()]),
+    }),
+  )
+
+  const photoLayout = await screen.findByRole("checkbox", { name: /Anúncio com foto/i })
+  expect(photoLayout).toBeDisabled()
+  expect(screen.getByText(/precisa de imagem/i)).toBeInTheDocument()
+
+  await userEvent.upload(
+    screen.getByLabelText("Imagem da campanha"),
+    new File(["imagem"], "campanha.png", { type: "image/png" }),
+  )
+
+  expect(photoLayout).toBeEnabled()
+})
+
+it("interrompe campanhas quando a revisão não tem direção criativa", async () => {
+  renderCampaign(fakeClient())
+
+  expect(
+    await screen.findByText("Esta marca ainda não está pronta para gerar campanhas."),
+  ).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /Criar campanha/ })).toBeDisabled()
+  expect(screen.getByRole("link", { name: "Refazer leitura da marca" })).toHaveAttribute(
+    "href",
+    "/",
   )
 })

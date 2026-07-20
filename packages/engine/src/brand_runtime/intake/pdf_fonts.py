@@ -12,6 +12,7 @@ from fontTools.ttLib import TTFont, TTLibError
 
 from brand_runtime.intake.base import Candidate
 from brand_runtime.intake.fonts import FontInfo, font_info_from_ttfont
+from brand_runtime.intake.pdf_text import extract_pdf_text_pages
 from brand_runtime.ir.models import Evidence
 
 _CONFIDENCE = 0.8
@@ -49,8 +50,11 @@ _HEADING_LABELS = (
     "estrutura e impacto",
     "acento autoral",
     "accent",
+    "display & ui",
+    "display e ui",
     "titulos",
     "titulo",
+    "nomes de produto",
     "display",
     "heading",
 )
@@ -58,12 +62,32 @@ _BODY_LABELS = (
     "leitura & ui",
     "leitura e ui",
     "texto corrido",
+    "legendas e etiquetas",
     "corpo",
     "body",
 )
-_IGNORED_FAMILY_LINES = frozenset({"digital", "artisan", "primarias", "hex", "rgb", "cmyk"})
-_INLINE_DECLARATION_SEPARATOR = re.compile(r"\s*[·•|]\s*")
+_IGNORED_FAMILY_LINES = frozenset(
+    {
+        "digital",
+        "artisan",
+        "primarias",
+        "hex",
+        "rgb",
+        "cmyk",
+        "weights",
+        "use",
+        "headlines",
+        "wordmark",
+        "caps labels",
+        "caps tracking",
+    }
+)
+_INLINE_DECLARATION_SEPARATOR = re.compile(r"(?:\s*[·•|—–]\s*|\s+\?\s+)")
 _FAMILY_WORD = re.compile(r"[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'’.-]*", re.IGNORECASE)
+_QUOTED_FAMILY = re.compile(
+    r"[\"“](?P<family>[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'’.-]*"
+    r"(?:\s+[A-ZÀ-ÖØ-Þ][\wÀ-ÖØ-öø-ÿ'’.-]*){0,3})[\"”]"
+)
 
 
 def _consume_tokens(text: str) -> tuple[int | None, bool, bool]:
@@ -183,6 +207,10 @@ def _recover_family_spelling(compact_family: str, lines: list[str]) -> str | Non
                 if _compact_name(phrase) == target and _FAMILY_LINE.fullmatch(phrase):
                     return phrase
     if len(target) >= 3 and " " not in compact_family and compact_family.isalpha():
+        for suffix in ("grotesque", "grotesk", "display", "serif", "sans"):
+            if target.endswith(suffix) and len(target) > len(suffix):
+                stem = target[: -len(suffix)]
+                return f"{stem.title()} {suffix.title()}"
         return compact_family.title()
     return None
 
@@ -223,13 +251,39 @@ def _inline_declared_font(
     return role, family, weight, style
 
 
+def _ocr_labeled_font(
+    line: str,
+    lines: list[str],
+) -> tuple[str, str, int, str] | None:
+    """Recupera família colada ao rótulo por OCR usando outra menção legível."""
+    compact_line = _compact_name(line)
+    role: str | None = None
+    if any(_compact_name(label) in compact_line for label in _HEADING_LABELS):
+        role = "heading"
+    elif any(_compact_name(label) in compact_line for label in _BODY_LABELS):
+        role = "body"
+    if role is None:
+        return None
+
+    families = [
+        match["family"]
+        for candidate_line in lines
+        for match in _QUOTED_FAMILY.finditer(candidate_line)
+        if _valid_family(match["family"])
+    ]
+    family = next(
+        (candidate for candidate in families if compact_line.startswith(_compact_name(candidate))),
+        None,
+    )
+    if family is None:
+        return None
+    return role, family, 700 if role == "heading" else 400, "normal"
+
+
 def _matches_role_label(compact_line: str, labels: tuple[str, ...]) -> bool:
     """Distingue um rótulo editorial de um nome como ``Clash Display``."""
-    return any(
-        compact_line == label.replace(" ", "")
-        or compact_line.startswith(f"{label.replace(' ', '')}:")
-        for label in labels
-    )
+    normalized_line = _compact_name(compact_line)
+    return any(normalized_line == _compact_name(label) for label in labels)
 
 
 def extract_pdf_declared_fonts(pdf_path: Path) -> dict[str, list[Candidate]]:
@@ -245,11 +299,12 @@ def extract_pdf_declared_fonts(pdf_path: Path) -> dict[str, list[Candidate]]:
         "heading": {},
         "body": {},
     }
+    text_pages = extract_pdf_text_pages(pdf_path)
     with pymupdf.open(pdf_path) as doc:
         for page_index, page in enumerate(doc):
-            lines = [line.strip() for line in page.get_text().splitlines()]
+            lines = [line.strip() for line in text_pages[page_index].text.splitlines()]
             for index, line in enumerate(lines):
-                inline = _inline_declared_font(line, lines)
+                inline = _inline_declared_font(line, lines) or _ocr_labeled_font(line, lines)
                 if inline is not None:
                     role, family, weight, style = inline
                     key = (family.casefold(), weight, style)

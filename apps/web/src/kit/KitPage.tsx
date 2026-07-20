@@ -5,6 +5,7 @@ import { ApiError } from "../api/client"
 import { useApi } from "../api/context"
 import type { BrandIr, LayoutSpec } from "../api/types"
 import { brandThemeStyle } from "../brandTheme"
+import { materializeContentLayout } from "../editor/contentLayout"
 import { Preview } from "../render/Preview"
 import { placeholderContent } from "./placeholder"
 
@@ -106,7 +107,8 @@ export function KitPage(): JSX.Element {
           <p className="kit-brand-name">{kit.brandIr.brand.name}</p>
           <h1>Kit da marca</h1>
           <p className="kit-intro">
-            Todos os modelos usam as mesmas cores, fontes e regras. Escolha uma peça e comece.
+            Cada peça já nasce com uma composição da marca. Abra qualquer uma para editar,
+            mover, duplicar ou acrescentar elementos.
           </p>
           <p className="kit-count">{kit.layouts.length} modelos disponíveis</p>
           <div className="brand-material-summary" aria-label="Fonte usada nos títulos">
@@ -125,32 +127,12 @@ export function KitPage(): JSX.Element {
           </Link>
         </header>
 
-        <section className="kit-workflows" aria-labelledby="kit-workflows-title">
-          <div className="kit-workflows-heading">
-            <h2 id="kit-workflows-title">Uma origem. Todo o trabalho conectado.</h2>
-          </div>
-          <div className="kit-workflow-grid">
-            <Link
-              className="kit-workflow-card kit-workflow-card-primary"
-              to={`/marcas/${encodeURIComponent(revisionId)}/campanhas`}
-            >
-              <span>
-                <strong>Modo Campanha</strong>
-                <small>Uma mensagem mantém post, story, apresentação e documento ligados.</small>
-              </span>
-              <span className="kit-workflow-action">Abrir campanha →</span>
-            </Link>
-            <Link
-              className="kit-workflow-card"
-              to={`/marcas/${encodeURIComponent(revisionId)}/word`}
-            >
-              <span>
-                <strong>Aplicar marca ao Word</strong>
-                <small>Transforme um `.docx` existente sem perder conteúdo nem edição.</small>
-              </span>
-              <span className="kit-workflow-action">Enviar Word →</span>
-            </Link>
-          </div>
+        <section className="kit-library-heading" aria-labelledby="kit-library-title">
+          <p className="panel-kicker">Peças individuais</p>
+          <h2 id="kit-library-title">Escolha uma composição. Depois faça dela a sua peça.</h2>
+          <p>
+            Texto, imagem, logo, assinatura e formas continuam separados e editáveis.
+          </p>
         </section>
 
         <div
@@ -158,8 +140,10 @@ export function KitPage(): JSX.Element {
           data-layout-count={kit.layouts.length}
           aria-label="Modelos disponíveis"
         >
-          {kit.layouts.map((layout) => (
-            <Link
+          {kit.layouts.map((layout) => {
+            const sample = placeholderContent(layout, revisionId, kit.brandIr)
+            return (
+              <Link
               key={layout.id}
               className="kit-card"
               to={`/marcas/${encodeURIComponent(revisionId)}/editor/${encodeURIComponent(layout.id)}`}
@@ -170,8 +154,8 @@ export function KitPage(): JSX.Element {
               <span className="kit-proof">
                 <Preview
                   brandIr={kit.brandIr}
-                  layoutSpec={layout}
-                  contentSpec={placeholderContent(layout, revisionId, kit.brandIr.brand.name)}
+                  layoutSpec={materializeContentLayout(layout, sample)}
+                  contentSpec={sample}
                   assetsBaseUrl={assetsBaseUrl}
                   maxWidthPx={360}
                 />
@@ -185,9 +169,38 @@ export function KitPage(): JSX.Element {
                   {layout.canvas.widthPx} × {layout.canvas.heightPx} px
                 </span>
               </span>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
         </div>
+
+        <section className="kit-workflows" aria-labelledby="kit-workflows-title">
+          <div className="kit-workflows-heading">
+            <h2 id="kit-workflows-title">Quando uma peça precisa virar sequência.</h2>
+          </div>
+          <div className="kit-workflow-grid">
+            <Link
+              className="kit-workflow-card kit-workflow-card-primary"
+              to={`/marcas/${encodeURIComponent(revisionId)}/carrossel`}
+            >
+              <span>
+                <strong>Modo Carrossel</strong>
+                <small>Escolha a quantidade e construa capa, conteúdo e fechamento.</small>
+              </span>
+              <span className="kit-workflow-action">Criar carrossel →</span>
+            </Link>
+            <Link
+              className="kit-workflow-card"
+              to={`/marcas/${encodeURIComponent(revisionId)}/word`}
+            >
+              <span>
+                <strong>Aplicar marca ao Word</strong>
+                <small>Transforme um `.docx` existente sem perder conteúdo nem edição.</small>
+              </span>
+              <span className="kit-workflow-action">Enviar Word →</span>
+            </Link>
+          </div>
+        </section>
       </div>
     </main>
   )

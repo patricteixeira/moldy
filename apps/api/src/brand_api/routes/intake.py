@@ -287,7 +287,10 @@ async def import_brand(
             package_dir,
             max_image_pixels=request.app.state.settings.max_image_pixels,
         )
-        draft = build_draft(package_dir)
+        draft = build_draft(
+            package_dir,
+            translator=request.app.state.identity_translator,
+        )
         await resolve_draft_fonts(
             draft,
             package_dir,

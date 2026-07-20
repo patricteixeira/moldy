@@ -14,13 +14,17 @@ from brand_api.auth import require_token
 from brand_api.db import new_id
 from brand_api.models import BrandRevision, Campaign, CampaignPiece, Document
 from brand_api.routes.documents import DocumentBody, _layout_from_revision, _validated_content
-from brand_runtime import BrandIR, LayoutSpec, run_static_checks
+from brand_runtime import BrandIR, LayoutSpec, apply_creative_direction, run_static_checks
 from brand_runtime.kit.models import Slot
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_token)])
 
 CampaignTextSource = Literal["headline", "body", "body-meta", "meta", "all"]
 _IMAGE_MISSING_DETAIL = "A imagem da campanha não foi encontrada — envie-a novamente."
+_DIRECTION_MISSING_DETAIL = (
+    "Esta revisão ainda não tem uma direção criativa confiável. "
+    "Revise a leitura da identidade antes de gerar uma campanha."
+)
 
 
 class CampaignFields(BaseModel):
@@ -179,6 +183,24 @@ def _validate_campaign_image(fields: CampaignFields, request: Request) -> None:
         )
 
 
+def _validate_campaign_layout(ir: BrandIR, layout: LayoutSpec, fields: CampaignFields) -> None:
+    """Impede a materialização de uma peça que já nasce estruturalmente vazia."""
+    if ir.creative_direction is None and layout.profile != "doc-a4":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=_DIRECTION_MISSING_DETAIL,
+        )
+    requires_image = any(slot.kind == "image" and slot.required for slot in layout.slots)
+    if requires_image and fields.image_sha256 is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"O modelo «{layout.name_pt}» precisa de uma imagem. "
+                "Envie uma foto ou escolha um modelo sem imagem."
+            ),
+        )
+
+
 def _campaign_response(session, campaign: Campaign) -> dict[str, Any]:
     pieces = list(
         session.scalars(
@@ -267,10 +289,15 @@ def create_campaign(body: CampaignCreateBody, request: Request) -> dict[str, Any
         session.flush()
         for layout_id in body.layout_ids:
             layout = _layout_from_revision(revision, layout_id)
+            _validate_campaign_layout(ir, layout, body.fields)
             bindings = _bindings_for_layout(layout)
-            content = _validated_content(
-                _content_from_bindings(revision.id, layout, body.fields, bindings),
-                request,
+            content = apply_creative_direction(
+                ir,
+                layout,
+                _validated_content(
+                    _content_from_bindings(revision.id, layout, body.fields, bindings),
+                    request,
+                ),
             )
             serialized_checks = _checks(ir, layout, content, request)
             document = Document(
@@ -319,10 +346,15 @@ def update_campaign(
         )
         for piece in pieces:
             layout = _layout_from_revision(revision, piece.layout_id)
+            _validate_campaign_layout(ir, layout, body.fields)
             bindings = dict(piece.bindings)
-            content = _validated_content(
-                _content_from_bindings(revision.id, layout, body.fields, bindings),
-                request,
+            content = apply_creative_direction(
+                ir,
+                layout,
+                _validated_content(
+                    _content_from_bindings(revision.id, layout, body.fields, bindings),
+                    request,
+                ),
             )
             document = session.get(Document, piece.document_id)
             if document is None:  # pragma: no cover - garantido pela FK

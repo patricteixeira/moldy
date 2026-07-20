@@ -113,6 +113,38 @@ class CampaignPiece(Base):
     created_at: Mapped[datetime] = _created_at()
 
 
+class Carousel(Base):
+    """Sequência editorial de formato único com papéis de abertura e fechamento."""
+
+    __tablename__ = "carousels"
+    __table_args__ = (Index("ix_carousels_brand_revision", "brand_revision_id"),)
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    brand_revision_id: Mapped[str] = mapped_column(ForeignKey("brand_revisions.id"))
+    name: Mapped[str] = mapped_column(Text)
+    profile: Mapped[str] = mapped_column(Text)
+    signature: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _created_at()
+
+
+class CarouselSlide(Base):
+    """Posição imutável de um documento dentro de um carrossel."""
+
+    __tablename__ = "carousel_slides"
+    __table_args__ = (
+        UniqueConstraint("carousel_id", "position", name="uq_carousel_slide_position"),
+        Index("ix_carousel_slides_carousel", "carousel_id"),
+    )
+
+    id: Mapped[str] = mapped_column(primary_key=True)
+    carousel_id: Mapped[str] = mapped_column(ForeignKey("carousels.id"))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), unique=True)
+    position: Mapped[int]
+    role: Mapped[str] = mapped_column(Text)
+    source: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _created_at()
+
+
 class Job(Base):
     """Unidade persistente da fila mínima de export."""
 

@@ -13,7 +13,17 @@ from brand_runtime.ir.models import (
 
 _AXES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "energy": (
-        ("calma", "serena", "silenciosa", "contemplativa", "sutil", "quiet", "calm"),
+        (
+            "calma",
+            "serena",
+            "silenciosa",
+            "contemplativa",
+            "sutil",
+            "quiet",
+            "silent",
+            "calm",
+            "restrained",
+        ),
         (
             "energica",
             "dinamica",
@@ -23,6 +33,9 @@ _AXES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "movimento",
             "bold",
             "dynamic",
+            "movement",
+            "monumental",
+            "dominant",
         ),
     ),
     "geometry": (
@@ -35,10 +48,26 @@ _AXES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "arquitetonica",
             "geometric",
             "modular",
+            "architectural",
+            "architecture",
+            "rigid",
+            "structure",
+            "sculptural",
         ),
     ),
     "density": (
-        ("essencial", "minimal", "respiro", "simples", "clara", "sparse", "focused"),
+        (
+            "essencial",
+            "minimal",
+            "respiro",
+            "simples",
+            "clara",
+            "sparse",
+            "focused",
+            "few elements",
+            "generous empty space",
+            "restraint",
+        ),
         (
             "camadas",
             "rica",
@@ -59,10 +88,24 @@ _AXES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "especialista",
             "professional",
             "rigorous",
+            "sophisticated",
+            "intellectual",
+            "couture",
         ),
     ),
     "materiality": (
-        ("tatil", "material", "papel", "feito a mao", "sensorial", "craft", "tactile"),
+        (
+            "tatil",
+            "material",
+            "papel",
+            "feito a mao",
+            "sensorial",
+            "craft",
+            "tactile",
+            "material-first",
+            "fabric",
+            "metal",
+        ),
         (
             "digital",
             "tecnologica",
@@ -83,6 +126,10 @@ _AXES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "radical",
             "emphatic",
             "contrast",
+            "tension",
+            "unexpected proportion",
+            "impossible proportion",
+            "visually dominant",
         ),
     ),
 }

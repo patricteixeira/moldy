@@ -363,3 +363,36 @@ class ContentSpec(CamelModel):
     values: dict[str, TextValue | ImageValue]
     overrides: dict[str, LayerOverride] = Field(default_factory=dict)
     surface: SurfaceStyle | None = None
+    added_slots: list[Slot] = Field(default_factory=list)
+    added_layers: list[ShapeLayer] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _added_elements_are_owned_by_the_document(self) -> ContentSpec:
+        """Mantém elementos livres identificáveis e sem colisões internas."""
+        added_ids = [
+            *(slot.id for slot in self.added_slots),
+            *(layer.id for layer in self.added_layers),
+        ]
+        if len(added_ids) != len(set(added_ids)):
+            raise ValueError("Os elementos adicionados precisam ter identificadores únicos.")
+        if any(not element_id.startswith("user-") for element_id in added_ids):
+            raise ValueError(
+                "Elementos adicionados precisam usar identificadores iniciados por user-."
+            )
+        return self
+
+
+def materialize_content_layout(layout: LayoutSpec, content: ContentSpec) -> LayoutSpec:
+    """Combina o modelo publicado com elementos livres persistidos na peça."""
+    if not content.added_slots and not content.added_layers:
+        return layout
+    serialized = layout.model_dump(mode="json", by_alias=True)
+    serialized["slots"] = [
+        *serialized["slots"],
+        *(slot.model_dump(mode="json", by_alias=True) for slot in content.added_slots),
+    ]
+    serialized["lockedLayers"] = [
+        *serialized.get("lockedLayers", []),
+        *(layer.model_dump(mode="json", by_alias=True) for layer in content.added_layers),
+    ]
+    return LayoutSpec.model_validate(serialized)

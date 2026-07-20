@@ -26,12 +26,16 @@ function validSelection(question: DraftQuestion, value: unknown): boolean {
   if (question.kind !== "review-identity") return value !== null
   if (typeof value !== "object" || value === null) return false
   const essence = (value as Record<string, unknown>).essence
-  return typeof essence === "string" && essence.trim().length > 0
+  if (typeof essence !== "string") return false
+  const normalized = essence.trim().toLocaleLowerCase("pt-BR")
+  return normalized.length > 0 && !new Set(["-", "—", ".", "...", "n/a", "na", "não sei", "nao sei"]).has(normalized)
 }
 
 function instructionForQuestion(question: DraftQuestion): string {
   if (question.kind === "review-identity") {
-    return "Confira os textos abaixo. Mude o que estiver errado e complete o que estiver faltando."
+    return question.candidates[0]?.evidence.length
+      ? "O Molda encontrou estas pistas no manual. Você só precisa conferir e corrigir o que estiver errado."
+      : "O manual não explicou estes pontos com clareza. Responda com palavras comuns; não é preciso conhecer termos de design."
   }
   if (question.kind === "pick-color") {
     return "Escolha a cor que a marca mais usa para esse caso."

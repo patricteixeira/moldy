@@ -2,6 +2,8 @@ import type {
   ApiClient,
   BrandIr,
   Campaign,
+  Carousel,
+  CarouselSlideInput,
   DocxBrandJobInfo,
   JobInfo,
   LayoutSpec,
@@ -403,6 +405,39 @@ export function fakeCampaign(): Campaign {
   }
 }
 
+export function fakeCarousel(
+  slides: CarouselSlideInput[] = [
+    { kicker: "", headline: "Capa", textBlocks: [], cta: "" },
+    { kicker: "", headline: "Conteúdo", textBlocks: [], cta: "" },
+    { kicker: "", headline: "Fechamento", textBlocks: [], cta: "" },
+  ],
+): Carousel {
+  const layout = fakeStatementLayout()
+  return {
+    id: "carousel_x",
+    brandRevisionId: FAKE_IR.revision.id,
+    name: "Sequência",
+    profile: "post-1x1",
+    signature: { text: "@acme", vertical: "bottom", horizontal: "left" },
+    createdAt: "2026-07-20T12:00:00Z",
+    slides: slides.map((source, index) => ({
+      id: `slide_${index + 1}`,
+      documentId: `doc_slide_${index + 1}`,
+      position: index + 1,
+      role: index === 0 ? "cover" : index === slides.length - 1 ? "closing" : "content",
+      source,
+      layoutId: layout.id,
+      layout,
+      content: {
+        layoutId: layout.id,
+        brandRevisionId: FAKE_IR.revision.id,
+        values: { headline: { kind: "text", text: source.headline } },
+      },
+      checks: [],
+    })),
+  }
+}
+
 export function fakeClient(overrides: Partial<ApiClient> = {}): ApiClient {
   const sha256 = "b".repeat(64)
   return {
@@ -440,6 +475,16 @@ export function fakeClient(overrides: Partial<ApiClient> = {}): ApiClient {
       name: input.name,
       fields: input.fields,
     })),
+    listCarousels: vi.fn(async () => []),
+    getCarousel: vi.fn(async () => fakeCarousel()),
+    createCarousel: vi.fn(async (input) => ({
+      ...fakeCarousel(input.slides),
+      name: input.name,
+      profile: input.profile,
+      signature: input.signature,
+      brandRevisionId: input.brandRevisionId,
+    })),
+    requestCarouselExport: vi.fn(async () => ({ jobId: "job_carousel" })),
     uploadAsset: vi.fn(async (file) => ({ sha256, size: file.size })),
     createDocument: vi.fn(async () => ({ documentId: "doc_x", checks: [] })),
     requestExport: vi.fn(async () => ({ jobId: "job_x" })),

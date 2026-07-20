@@ -1074,7 +1074,7 @@ function validateContent(raw: unknown, layout: LayoutSpec, ir: BrandIr): Content
   const content = record(raw, "contentSpec");
   onlyFields(
     content,
-    ["layoutId", "brandRevisionId", "values", "overrides", "surface"],
+    ["layoutId", "brandRevisionId", "values", "overrides", "surface", "addedSlots", "addedLayers"],
     "contentSpec",
   );
   const layoutId = nonEmptyString(content.layoutId, "contentSpec.layoutId");
@@ -1084,6 +1084,26 @@ function validateContent(raw: unknown, layout: LayoutSpec, ir: BrandIr): Content
     invalid("contentSpec.brandRevisionId diverge da revisão da marca.");
   const values = record(content.values, "contentSpec.values");
   const slots = new Map(layout.slots.map((slot) => [slot.id, slot]));
+  for (const [field, expectedKind] of [
+    ["addedSlots", "slot"],
+    ["addedLayers", "layer"],
+  ] as const) {
+    const additions = content[field];
+    if (additions === undefined) continue;
+    if (!Array.isArray(additions)) invalid(`contentSpec.${field} deve ser um array.`);
+    for (const [index, addition] of additions.entries()) {
+      const item = record(addition, `contentSpec.${field}[${index}]`);
+      const id = nonEmptyString(item.id, `contentSpec.${field}[${index}].id`);
+      if (!id.startsWith("user-")) {
+        invalid(`contentSpec.${field}[${index}].id precisa começar por user-.`);
+      }
+      const found =
+        expectedKind === "slot"
+          ? slots.has(id)
+          : (layout.lockedLayers ?? []).some((layer) => layer.id === id);
+      if (!found) invalid(`contentSpec.${field}[${index}] não está materializado no layout.`);
+    }
+  }
   for (const id of Object.keys(values).sort()) {
     const slot = slots.get(id);
     if (!slot) invalid(`contentSpec.values.${id} referencia slot desconhecido.`);

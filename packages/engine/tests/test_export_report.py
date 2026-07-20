@@ -19,7 +19,7 @@ from brand_runtime.export import (  # noqa: E402
     open_render_page,
 )
 from brand_runtime.kit.generator import generate_kit  # noqa: E402
-from brand_runtime.kit.models import ContentSpec, TextValue  # noqa: E402
+from brand_runtime.kit.models import ContentSpec, Slot, TextValue  # noqa: E402
 from tests.test_generator import _ir  # noqa: E402
 
 
@@ -89,6 +89,59 @@ def test_report_vira_orientacoes_na_ordem_do_slot(brand_package):
         ("text-overflow", "warning"),
         ("font-fallback", "warning"),
     ]
+
+
+def test_report_materializa_elemento_livre_uma_unica_vez(brand_package):
+    """Elementos do documento participam do report sem colidir com o layout base."""
+    ir, layout, content = _triplet(brand_package, "Olá, marca")
+    content = ContentSpec(
+        layout_id=content.layout_id,
+        brand_revision_id=content.brand_revision_id,
+        values={
+            **content.values,
+            "user-note-1": TextValue(text="Segunda voz"),
+        },
+        added_slots=[
+            Slot(
+                id="user-note-1",
+                kind="text",
+                role="heading",
+                area=(48, 700, 400, 120),
+                required=False,
+            )
+        ],
+    )
+
+    verdict = build_guard_verdict(
+        ir,
+        layout,
+        content,
+        brand_package,
+        MeasuredGuardReport(overflows=[], font_fallbacks=[]),
+    )
+
+    assert all(check.id != "added-elements-contract" for check in verdict.checks)
+
+
+def test_report_respeita_altura_editada_do_slot(brand_package):
+    """A medição usa a caixa efetiva depois de mover ou redimensionar texto."""
+    ir, layout, content = _triplet(brand_package, "A\n" * 40)
+    content = ContentSpec(
+        layout_id=content.layout_id,
+        brand_revision_id=content.brand_revision_id,
+        values=content.values,
+        overrides={"headline": {"area": [48, 216, 984, 500]}},
+    )
+    report = MeasuredGuardReport.model_validate(
+        {
+            "overflows": [{"slotId": "headline", "contentPx": 640, "boxPx": 500}],
+            "fontFallbacks": [],
+        }
+    )
+
+    verdict = build_guard_verdict(ir, layout, content, brand_package, report)
+
+    assert any(check.id == "text-overflow" for check in verdict.checks)
 
 
 def test_fallback_confirmado_e_fixed(brand_package):

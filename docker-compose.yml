@@ -67,6 +67,7 @@ services:
       BRANDRT_DATA_DIR: /data
       BRANDRT_BOOTSTRAP_TOKEN: ${BRANDRT_TOKEN:-brandrt-dev}
       BRANDRT_FONT_FETCH_BASE_URL: http://font-fetch:8081/google-fonts/
+      BRANDRT_TRANSLATION_MODEL_DIR: /opt/brandrt/translation/en-pb
     volumes:
       - data:/data
     depends_on:

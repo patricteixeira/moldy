@@ -111,12 +111,48 @@ it("permite restaurar a composição inicial da peça", async () => {
   expect(await screen.findByTestId("slot-input-headline")).toHaveValue("Apagar este rascunho")
   await userEvent.click(screen.getByRole("button", { name: "Desfazer todos os ajustes" }))
 
-  expect(screen.getByTestId("slot-input-headline")).toHaveValue("Sua mensagem aqui")
+  expect(screen.getByTestId("slot-input-headline")).toHaveValue("ACME em movimento.")
   await waitFor(() =>
     expect(JSON.parse(window.localStorage.getItem(key) ?? "{}")).toMatchObject({
-      version: 3,
-      values: { headline: { kind: "text", text: "Sua mensagem aqui" } },
+      version: 4,
+      values: { headline: { kind: "text", text: "ACME em movimento." } },
     }),
+  )
+})
+
+it("adiciona, edita, duplica e remove elementos livres da peça individual", async () => {
+  renderEditor(kitClient())
+  await screen.findByTestId("slot-input-headline")
+
+  await userEvent.click(screen.getByText("+ Adicionar elemento"))
+  const menu = screen.getByRole("group", { name: "Elementos disponíveis" })
+  await userEvent.click(within(menu).getByRole("button", { name: "Adicionar texto" }))
+
+  const customText = await screen.findByRole("textbox", { name: "Bloco de texto" })
+  expect(customText).toHaveValue("Novo bloco de texto")
+  await userEvent.clear(customText)
+  await userEvent.type(customText, "Uma segunda voz na composição")
+  await waitFor(() =>
+    expect(lastPayload().contentSpec).toMatchObject({
+      values: {
+        "user-text-1": { kind: "text", text: "Uma segunda voz na composição" },
+      },
+      addedSlots: [{ id: "user-kicker-1" }, { id: "user-signature-1" }, { id: "user-support-1" }, { id: "user-text-1" }],
+    }),
+  )
+
+  await userEvent.click(screen.getByRole("button", { name: "Duplicar" }))
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.addedSlots?.some((slot) => slot.id === "user-text-2")).toBe(true),
+  )
+  await userEvent.click(screen.getByRole("button", { name: "Remover" }))
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.addedSlots?.some((slot) => slot.id === "user-text-2")).toBe(false),
+  )
+
+  await userEvent.click(within(menu).getByRole("button", { name: "Adicionar forma ou linha" }))
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.addedLayers?.some((layer) => layer.id === "user-shape-1")).toBe(true),
   )
 })
 

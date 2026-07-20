@@ -236,11 +236,19 @@ export interface ExpressionAxis {
   evidenceTerms: string[]
 }
 
-export interface IdentityExpressionValue {
+export interface IdentityTextValue {
   essence: string
   personality: string
   voice: string
   avoid: string
+}
+
+export interface IdentityExpressionValue extends IdentityTextValue {
+  original?: IdentityTextValue | null
+  sourceLanguage?: "en" | "pt-BR" | "unknown"
+  displayLanguage?: "en" | "pt-BR" | "unknown"
+  translationStatus?: "not-needed" | "translated" | "unavailable"
+  translator?: string | null
 }
 
 export interface ContentSpec {
@@ -249,6 +257,8 @@ export interface ContentSpec {
   values: Record<string, SlotValue>
   overrides?: Record<string, LayerOverride>
   surface?: SurfaceStyle | null
+  addedSlots?: Slot[]
+  addedLayers?: ShapeLayer[]
 }
 
 export type SurfaceKind =
@@ -295,7 +305,7 @@ export type ExportFormat = "png" | "pdf" | "pptx" | "docx"
 export interface JobResult {
   sha256: string
   url: string
-  format: ExportFormat
+  format: ExportFormat | "zip"
   filename: string
 }
 
@@ -437,6 +447,44 @@ export interface Campaign {
   pieces: CampaignPiece[]
 }
 
+export type CarouselProfile = "post-1x1" | "post-4x5"
+export type CarouselSlideRole = "cover" | "content" | "closing"
+
+export interface CarouselSignature {
+  text: string
+  vertical: "top" | "bottom"
+  horizontal: "left" | "center" | "right"
+}
+
+export interface CarouselSlideInput {
+  kicker: string
+  headline: string
+  textBlocks: string[]
+  cta: string
+}
+
+export interface CarouselSlide {
+  id: string
+  documentId: string
+  position: number
+  role: CarouselSlideRole
+  source: CarouselSlideInput
+  layoutId: string
+  layout: LayoutSpec
+  content: ContentSpec
+  checks: GuardCheck[]
+}
+
+export interface Carousel {
+  id: string
+  brandRevisionId: string
+  name: string
+  profile: CarouselProfile
+  signature: CarouselSignature
+  createdAt: string
+  slides: CarouselSlide[]
+}
+
 export interface DocxBrandOperation {
   id: string
   kind:
@@ -523,6 +571,16 @@ export interface ApiClient {
     campaignId: string,
     input: { name: string; fields: CampaignFields },
   ): Promise<Campaign>
+  listCarousels(revisionId: string): Promise<Carousel[]>
+  getCarousel(carouselId: string): Promise<Carousel>
+  createCarousel(input: {
+    brandRevisionId: string
+    name: string
+    profile: CarouselProfile
+    signature: CarouselSignature
+    slides: CarouselSlideInput[]
+  }): Promise<Carousel>
+  requestCarouselExport(carouselId: string): Promise<{ jobId: string }>
   createDocument(content: ContentSpec): Promise<DocumentResult>
   requestExport(documentId: string, format: ExportFormat): Promise<{ jobId: string }>
   getJob(jobId: string): Promise<JobInfo>

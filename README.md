@@ -82,6 +82,18 @@ O Compose também executa `data-init`, um job efêmero e sem rede que prepara a
 permissão do volume para API e worker não-root; ele termina com código 0 antes
 dos cinco serviços permanentes iniciarem.
 
+Quando o manual está em inglês, a leitura de identidade é traduzida localmente
+para PT-BR e o original permanece disponível para conferência. O modelo aberto é
+fixado e incorporado no build da API: não existe API key, cobrança por uso nem
+envio do manual a um serviço de tradução. O primeiro build baixa cerca de 66 MiB;
+consulte o [ADR 0017](docs/adr/0017-traducao-local-do-manual.md) e os
+[avisos de terceiros](THIRD_PARTY_NOTICES.md).
+
+PDFs achatados, digitalizados ou com letras convertidas em desenho recebem OCR
+local em português e inglês. Essa camada é usada somente quando o documento não
+tem texto legível e é compartilhada por manifesto, cores declaradas, tipografia
+e regras de composição; consulte o [ADR 0018](docs/adr/0018-ocr-local-de-pdfs.md).
+
 Fontes abertas declaradas no manual são resolvidas automaticamente por um
 catálogo Google Fonts fixado, conferidas contra o objeto Git esperado, validadas
 e armazenadas localmente junto com a licença. A API e o worker não recebem

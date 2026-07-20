@@ -32,6 +32,16 @@ export function findEditorElement(layout: LayoutSpec, id: string | null): Editor
 }
 
 export function elementLabel(element: EditorElement): string {
+  if (element.id.startsWith("user-text-")) return "Bloco de texto"
+  if (element.id.startsWith("user-signature-")) return "Assinatura"
+  if (element.id.startsWith("user-kicker-")) return "Linha de contexto"
+  if (element.id.startsWith("user-support-")) return "Texto de apoio"
+  if (element.id.startsWith("user-index-")) return "Número"
+  if (element.id.startsWith("user-image-")) return "Imagem"
+  if (element.id.startsWith("user-logo-")) return "Logo"
+  if (element.id.startsWith("user-shape-") || element.id.startsWith("user-rule-")) {
+    return "Forma ou linha"
+  }
   if (element.kind === "text" || element.kind === "image" || element.kind === "logo") {
     return slotLabel(element.id)
   }

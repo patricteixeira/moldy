@@ -11,11 +11,11 @@ from __future__ import annotations
 import re
 import unicodedata
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
-import pymupdf
 from pydantic import Field
 
+from brand_runtime.intake.pdf_text import extract_pdf_text_pages
 from brand_runtime.ir.models import CamelModel, Evidence
 
 DeclaredColorRole = Literal["primary", "background", "accent"]
@@ -144,14 +144,9 @@ def extract_pdf_composition(pdf_path: Path) -> CompositionDeclarations:
     result = CompositionDeclarations()
     ratio_by_role: dict[DeclaredColorRole, DeclaredColorRatio] = {}
 
-    with pymupdf.open(pdf_path) as document:
-        pages = [
-            (
-                page_index + 1,
-                _searchable(cast(str, document.load_page(page_index).get_text("text"))),
-            )
-            for page_index in range(len(document))
-        ]
+    pages = [
+        (page.page_number, _searchable(page.text)) for page in extract_pdf_text_pages(pdf_path)
+    ]
 
     for page_number, text in pages:
         compact = text.replace(" ", "").replace("\n", "")

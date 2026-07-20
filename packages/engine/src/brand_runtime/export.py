@@ -21,7 +21,12 @@ from pydantic import Field, ValidationError
 
 from brand_runtime.guard.static_checks import GuardCheck, GuardVerdict, run_static_checks
 from brand_runtime.ir.models import BrandIR, CamelModel
-from brand_runtime.kit.models import ContentSpec, LayoutSpec, TextValue
+from brand_runtime.kit.models import (
+    ContentSpec,
+    LayoutSpec,
+    TextValue,
+    materialize_content_layout,
+)
 
 if TYPE_CHECKING:
     from playwright.sync_api import Page
@@ -260,6 +265,7 @@ def open_render_page(
     render_dist: Path,
 ) -> Iterator["Page"]:
     """Abre a página estável em Chromium isolado e limitado à origem efêmera."""
+    active_layout = materialize_content_layout(layout, content)
     try:
         from playwright.sync_api import Error as PlaywrightError
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -282,8 +288,8 @@ def open_render_page(
                     browser = playwright.chromium.launch(args=list(DEFAULT_LAUNCH_ARGS))
                     context = browser.new_context(
                         viewport={
-                            "width": layout.canvas.width_px,
-                            "height": layout.canvas.height_px,
+                            "width": active_layout.canvas.width_px,
+                            "height": active_layout.canvas.height_px,
                         },
                         device_scale_factor=1,
                     )
@@ -297,7 +303,7 @@ def open_render_page(
                             route.abort()
 
                     page.route("**/*", route_request)
-                    payload = build_payload(ir, layout, content, f"{base}/pkg")
+                    payload = build_payload(ir, active_layout, content, f"{base}/pkg")
 
                     # A API Python de add_init_script não recebe argumento. O
                     # payload cruza o protocolo pelo argumento serializado de
@@ -387,7 +393,10 @@ def _validated_measurements(
         if overflow.slot_id in overflows:
             raise ExportError(f"O report medido repete o overflow do slot «{overflow.slot_id}».")
         slot = eligible[overflow.slot_id]
-        expected_box_px = slot.area[3]
+        override = content.overrides.get(overflow.slot_id)
+        expected_box_px = (
+            override.area[3] if override is not None and override.area else slot.area[3]
+        )
         if overflow.box_px != expected_box_px or overflow.content_px <= overflow.box_px:
             raise ExportError(
                 f"A medição de overflow do slot «{overflow.slot_id}» é inconsistente."
@@ -444,9 +453,10 @@ def build_guard_verdict(
     report: MeasuredGuardReport,
 ) -> GuardVerdict:
     """Combina checks estáticos e medições na ordem declarada dos slots."""
+    active_layout = materialize_content_layout(layout, content)
     checks = list(run_static_checks(ir, layout, content, assets_dir))
-    overflows, fallbacks = _validated_measurements(ir, layout, content, report)
-    for slot in layout.slots:
+    overflows, fallbacks = _validated_measurements(ir, active_layout, content, report)
+    for slot in active_layout.slots:
         overflow = overflows.get(slot.id)
         if overflow is not None:
             checks.append(

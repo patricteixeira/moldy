@@ -14,15 +14,15 @@ function renderChrome(pathname: string): void {
 }
 
 describe("AppChrome", () => {
-  it("orienta a campanha dentro do kit e usa o nome público do produto", () => {
-    renderChrome("/marcas/brandrev_test/campanhas")
+  it("orienta o carrossel dentro do kit e usa o nome público do produto", () => {
+    renderChrome("/marcas/brandrev_test/carrossel")
 
     expect(screen.getByRole("link", { name: "Molda, início" })).toHaveAttribute("href", "/")
     expect(screen.getByRole("link", { name: "Kit" })).toHaveAttribute(
       "href",
       "/marcas/brandrev_test/kit",
     )
-    expect(screen.getByText("Campanhas", { selector: ".app-route-current" })).toBeInTheDocument()
+    expect(screen.getByText("Carrossel", { selector: ".app-route-current" })).toBeInTheDocument()
   })
 
   it("nomeia a área de Word sem parecer uma página inexistente", () => {

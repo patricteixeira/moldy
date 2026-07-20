@@ -98,13 +98,24 @@ it("export feliz: documento → job → link de download", async () => {
   expect(link).toHaveAttribute("href", `/v1/assets/${sha}`)
   expect(link).toHaveAttribute("download", "doc1.png")
   expect(screen.getByTestId("export-status")).toHaveTextContent("PNG pronto para baixar.")
-  expect(createDocument).toHaveBeenCalledWith({
-    layoutId: "statement-post-1x1",
-    brandRevisionId: "brandrev_test",
-    overrides: {},
-    surface: null,
-    values: { headline: { kind: "text", text: "Lançamento em agosto" } },
-  })
+  expect(createDocument).toHaveBeenCalledWith(
+    expect.objectContaining({
+      layoutId: "statement-post-1x1",
+      brandRevisionId: "brandrev_test",
+      overrides: {},
+      surface: null,
+      values: expect.objectContaining({
+        headline: { kind: "text", text: "Lançamento em agosto" },
+      }),
+      addedSlots: expect.arrayContaining([
+        expect.objectContaining({ id: "user-kicker-1" }),
+        expect.objectContaining({ id: "user-signature-1" }),
+      ]),
+      addedLayers: expect.arrayContaining([
+        expect.objectContaining({ id: "user-rule-1" }),
+      ]),
+    }),
+  )
   expect(requestExport).toHaveBeenCalledWith("doc1", "png")
 })
 

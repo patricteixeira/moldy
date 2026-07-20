@@ -17,6 +17,7 @@ from brand_runtime.kit.models import (
     SURFACE_KINDS,
     SurfaceStyle,
     TextValue,
+    materialize_content_layout,
 )
 
 
@@ -91,6 +92,69 @@ def test_content_spec_round_trip():
     data = json.loads(cs.model_dump_json(by_alias=True))
     assert data["layoutId"] == "statement-post-1x1"
     assert ContentSpec.model_validate(data) == cs
+
+
+def test_document_can_materialize_editable_user_elements_without_mutating_layout():
+    layout = _layout()
+    content = ContentSpec(
+        layout_id=layout.id,
+        brand_revision_id="brandrev_abc",
+        values={
+            "headline": TextValue(text="Original"),
+            "user-text-1": TextValue(text="Bloco adicional"),
+        },
+        added_slots=[
+            Slot(
+                id="user-text-1",
+                kind="text",
+                role="body",
+                area=(48, 800, 500, 120),
+                required=False,
+            )
+        ],
+        added_layers=[
+            ShapeLayer(
+                id="user-shape-1",
+                shape="rectangle",
+                area=(48, 760, 200, 4),
+                color_token="color.primary",
+            )
+        ],
+    )
+
+    active = materialize_content_layout(layout, content)
+
+    assert [slot.id for slot in layout.slots] == ["headline"]
+    assert [slot.id for slot in active.slots] == ["headline", "user-text-1"]
+    assert [layer.id for layer in active.locked_layers] == ["user-shape-1"]
+    assert content.model_dump(mode="json", by_alias=True)["addedSlots"][0]["id"] == "user-text-1"
+
+
+def test_document_owned_elements_require_user_prefix_and_unique_ids():
+    with pytest.raises(Exception, match="user-"):
+        ContentSpec(
+            layout_id="statement-post-1x1",
+            brand_revision_id="brandrev_abc",
+            values={},
+            added_slots=[Slot(id="free-text", kind="text", role="body", area=(0, 0, 100, 100))],
+        )
+
+    shared = "user-element-1"
+    with pytest.raises(Exception, match="únicos"):
+        ContentSpec(
+            layout_id="statement-post-1x1",
+            brand_revision_id="brandrev_abc",
+            values={},
+            added_slots=[Slot(id=shared, kind="text", role="body", area=(0, 0, 100, 100))],
+            added_layers=[
+                ShapeLayer(
+                    id=shared,
+                    shape="rectangle",
+                    area=(0, 0, 10, 10),
+                    color_token="color.primary",
+                )
+            ],
+        )
 
 
 @pytest.mark.parametrize("kind", SURFACE_KINDS)

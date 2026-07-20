@@ -57,6 +57,7 @@ def make_client(pg_engine, db, tmp_path):
 
     def make(**overrides):
         font_resolver = overrides.pop("font_resolver", None)
+        identity_translator = overrides.pop("identity_translator", None)
         settings = Settings(
             database_url=TEST_DB_URL,
             data_dir=tmp_path / "var",
@@ -64,7 +65,13 @@ def make_client(pg_engine, db, tmp_path):
             fake_exporter=True,
             **overrides,
         )
-        client = TestClient(create_app(settings, font_resolver=font_resolver))
+        client = TestClient(
+            create_app(
+                settings,
+                font_resolver=font_resolver,
+                identity_translator=identity_translator,
+            )
+        )
         client.headers["Authorization"] = "Bearer test-token"
         clients.append(client)
         return client

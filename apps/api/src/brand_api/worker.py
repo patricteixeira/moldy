@@ -8,6 +8,7 @@ import shutil
 import stat
 import threading
 import time
+import zipfile
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -27,7 +28,8 @@ from brand_api.exporters import (
     NativeOfficeExporter,
     PlaywrightExporter,
 )
-from brand_api.models import BrandRevision, Document, Job
+from brand_api.layout_catalog import resolve_layout
+from brand_api.models import BrandRevision, Carousel, CarouselSlide, Document, Job
 from brand_api.storage import Storage
 from brand_runtime import (
     BrandIR,
@@ -372,24 +374,69 @@ def _load_export_contract(session_factory, lease: _JobLease):
             raise RuntimeError("Um job web não pode informar template nativo.")
         ir = BrandIR.model_validate(revision.ir)
         content = ContentSpec.model_validate(document.content)
-        raw_layout = next(
-            (
-                item
-                for item in revision.kit
-                if isinstance(item, dict) and item.get("id") == document.layout_id
-            ),
-            None,
-        )
-        if raw_layout is None:
+        layout = resolve_layout(revision, document.layout_id)
+        if layout is None:
             raise RuntimeError("O layout do documento não existe na revisão.")
         return (
             document.id,
             ir,
-            LayoutSpec.model_validate(raw_layout),
+            layout,
             content,
             dict(revision.manifest),
             fmt,
             native_template_version,
+        )
+
+
+def _load_carousel_export_contract(
+    session_factory,
+    lease: _JobLease,
+) -> tuple[str, BrandIR, dict[str, str], list[tuple[int, str, LayoutSpec, ContentSpec]]]:
+    """Carrega a série ordenada e resolve seus layouts internos deterministicamente."""
+    with session_factory() as session:
+        job = session.get(Job, lease.job_id)
+        if job is None or not _owns_lease(job, lease.lease_id) or job.kind != "carousel-export":
+            raise RuntimeError("O job reivindicado não está disponível para o carrossel.")
+        params = job.params if isinstance(job.params, dict) else {}
+        carousel_id = params.get("carouselId")
+        if not isinstance(carousel_id, str) or params.get("format") != "png":
+            raise RuntimeError("O job do carrossel não possui parâmetros válidos.")
+        carousel = session.get(Carousel, carousel_id)
+        if carousel is None:
+            raise RuntimeError("O carrossel do job não foi encontrado.")
+        revision = session.get(BrandRevision, carousel.brand_revision_id)
+        if revision is None:
+            raise RuntimeError("A revisão do carrossel não foi encontrada.")
+        slides = list(
+            session.scalars(
+                select(CarouselSlide)
+                .where(CarouselSlide.carousel_id == carousel.id)
+                .order_by(CarouselSlide.position)
+            )
+        )
+        if len(slides) < 3:
+            raise RuntimeError("O carrossel não possui uma sequência completa.")
+        contracts: list[tuple[int, str, LayoutSpec, ContentSpec]] = []
+        for slide in slides:
+            document = session.get(Document, slide.document_id)
+            if document is None:
+                raise RuntimeError("Um documento do carrossel não foi encontrado.")
+            layout = resolve_layout(revision, document.layout_id)
+            if layout is None:
+                raise RuntimeError("Um layout do carrossel não pôde ser resolvido.")
+            contracts.append(
+                (
+                    slide.position,
+                    document.id,
+                    layout,
+                    ContentSpec.model_validate(document.content),
+                )
+            )
+        return (
+            carousel.id,
+            BrandIR.model_validate(revision.ir),
+            dict(revision.manifest),
+            contracts,
         )
 
 
@@ -580,6 +627,32 @@ def _finish_roundtrip_success(
         session.commit()
 
 
+def _finish_carousel_success(
+    session_factory,
+    lease: _JobLease,
+    carousel_id: str,
+    checks: list[dict],
+    sha256: str,
+) -> None:
+    """Publica um ZIP único sem associá-lo artificialmente a um slide."""
+    with session_factory() as session:
+        job = session.scalars(select(Job).where(Job.id == lease.job_id).with_for_update()).first()
+        if job is None or not _owns_lease(job, lease.lease_id):
+            raise _LeaseLost("O job mudou de lease antes de concluir o carrossel.")
+        job.checks = checks
+        job.status = "succeeded"
+        job.params = {key: value for key, value in job.params.items() if key != _LEASE_KEY}
+        job.result = {
+            "sha256": sha256,
+            "url": f"/v1/assets/{sha256}",
+            "format": "zip",
+            "filename": f"{carousel_id}.zip",
+        }
+        job.error = None
+        job.finished_at = datetime.now(UTC)
+        session.commit()
+
+
 def _finish_failure(
     session_factory,
     lease: _JobLease,
@@ -664,6 +737,56 @@ def run_next_job(
                 sha256 = storage.put(_read_exact_output(out_path, workdir, workdir_identity))
                 heartbeat.ensure_owned()
                 _finish_success(session_factory, lease, document_id, checks, sha256, fmt)
+        elif kind == "carousel-export":
+            carousel_id, ir, manifest, contracts = _load_carousel_export_contract(
+                session_factory,
+                lease,
+            )
+            workdir = _safe_job_workdir(settings.work_dir, lease)
+            with _LeaseHeartbeat(session_factory, lease, heartbeat_seconds) as heartbeat:
+                build_brand_workdir(manifest, ir, storage, workdir)
+                workdir_identity = workdir.resolve(strict=True)
+                serialized_checks: list[dict] = []
+                slide_paths: list[tuple[int, Path]] = []
+                for position, slide_document_id, layout, content in contracts:
+                    out_path = workdir / f"slide-{position:02d}.png"
+                    outcome = exporter.export(
+                        ir=ir,
+                        layout=layout,
+                        content=content,
+                        assets_dir=workdir,
+                        fmt="png",
+                        out_path=out_path,
+                    )
+                    checks = _serialize_checks(outcome.checks)
+                    if any(check["status"] == "blocked" for check in checks):
+                        raise ExportRejected([GuardCheck.model_validate(check) for check in checks])
+                    serialized_checks.extend(checks)
+                    slide_paths.append((position, out_path))
+                    heartbeat.ensure_owned()
+                    with session_factory() as session:
+                        document = session.get(Document, slide_document_id)
+                        if document is not None:
+                            document.checks = checks
+                            session.commit()
+                zip_path = workdir / "out.zip"
+                with zipfile.ZipFile(
+                    zip_path,
+                    mode="x",
+                    compression=zipfile.ZIP_DEFLATED,
+                ) as archive:
+                    for position, slide_path in slide_paths:
+                        archive.write(slide_path, arcname=f"{position:02d}.png")
+                heartbeat.ensure_owned()
+                sha256 = storage.put(_read_exact_output(zip_path, workdir, workdir_identity))
+                heartbeat.ensure_owned()
+                _finish_carousel_success(
+                    session_factory,
+                    lease,
+                    carousel_id,
+                    serialized_checks,
+                    sha256,
+                )
         elif kind in {"roundtrip-lint", "roundtrip-fix"}:
             document_id, ir, baseline_sha256, edited_sha256, plan = _load_roundtrip_contract(
                 session_factory,
@@ -799,7 +922,7 @@ def run_next_job(
     except Exception as exc:
         operation = (
             "export"
-            if kind == "export"
+            if kind in {"export", "carousel-export"}
             else "aplicação de marca ao Word"
             if kind in {"docx-brand-analyze", "docx-brand-apply"}
             else "round-trip"

@@ -63,6 +63,46 @@ def test_persiste_overrides_autorais_para_preview_e_export(client, compiled, db)
     assert headline["hidden"] is False and logo["hidden"] is False
 
 
+def test_persiste_elementos_adicionados_como_parte_editavel_da_peca(client, compiled, db):
+    payload = _statement(compiled)
+    payload["values"]["user-text-1"] = {
+        "kind": "text",
+        "text": "Uma segunda camada de leitura",
+    }
+    payload["addedSlots"] = [
+        {
+            "id": "user-text-1",
+            "kind": "text",
+            "role": "body",
+            "area": [48, 780, 560, 120],
+            "fit": "shrink-within-role-range",
+            "required": False,
+            "zIndex": 8,
+        }
+    ]
+    payload["addedLayers"] = [
+        {
+            "id": "user-shape-1",
+            "kind": "shape",
+            "shape": "rectangle",
+            "area": [48, 748, 180, 4],
+            "colorToken": "color.primary",
+            "opacity": 1,
+            "zIndex": 6,
+        }
+    ]
+
+    response = client.post("/v1/documents", json=payload)
+
+    assert response.status_code == 201, response.text
+    assert not any(check["status"] == "blocked" for check in response.json()["checks"])
+    persisted = db.scalar(select(Document).where(Document.id == response.json()["documentId"]))
+    assert persisted is not None
+    assert persisted.content["addedSlots"][0]["id"] == "user-text-1"
+    assert persisted.content["addedLayers"][0]["id"] == "user-shape-1"
+    assert persisted.content["values"]["user-text-1"]["text"].startswith("Uma segunda")
+
+
 def test_override_fora_do_contrato_retorna_422(client, compiled):
     payload = _statement(compiled)
     payload["overrides"] = {"headline": {"fontSizePx": 4}}

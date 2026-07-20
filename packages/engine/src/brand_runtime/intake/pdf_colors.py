@@ -10,6 +10,7 @@ import pymupdf
 
 from brand_runtime.colors import dedupe_colors, delta_e, normalize_color
 from brand_runtime.intake.base import Candidate
+from brand_runtime.intake.pdf_text import extract_pdf_text_pages
 from brand_runtime.ir.models import Evidence
 
 _VECTOR_CONFIDENCE = 0.9
@@ -85,9 +86,7 @@ def extract_pdf_declared_colors(pdf_path: Path) -> dict[str, list[Candidate]]:
     independentes porque uma mesma cor pode ser, legitimamente, primária e de
     texto.
     """
-    pages: list[tuple[int, str]] = []
-    with pymupdf.open(pdf_path) as doc:
-        pages = [(index + 1, page.get_text()) for index, page in enumerate(doc)]
+    pages = [(page.page_number, page.text) for page in extract_pdf_text_pages(pdf_path)]
 
     # Marcador preserva a página sem impedir que um rótulo no fim de uma página
     # qualifique o HEX que abre a seguinte (caso comum em PDFs impressos do web).

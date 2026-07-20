@@ -11,10 +11,11 @@ from pydantic.alias_generators import to_camel
 
 from brand_api.auth import require_token
 from brand_api.db import new_id
+from brand_api.layout_catalog import resolve_layout
 from brand_api.models import BrandRevision, Document, Job
 from brand_api.native_templates import CURRENT_NATIVE_TEMPLATE_VERSION
 from brand_runtime import BrandIR, ContentSpec, LayoutSpec, run_static_checks
-from brand_runtime.kit.models import ImageValue, SurfaceStyle
+from brand_runtime.kit.models import ImageValue, ShapeLayer, Slot, SurfaceStyle
 
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_token)])
 
@@ -31,6 +32,8 @@ class DocumentBody(BaseModel):
     values: dict[str, Any]
     overrides: dict[str, Any] = Field(default_factory=dict)
     surface: SurfaceStyle | None = None
+    added_slots: list[Slot] = Field(default_factory=list)
+    added_layers: list[ShapeLayer] = Field(default_factory=list)
 
 
 class ExportBody(BaseModel):
@@ -43,16 +46,13 @@ class ExportBody(BaseModel):
 
 def _layout_from_revision(revision: BrandRevision, layout_id: str) -> LayoutSpec:
     """Seleciona e valida um layout persistido sem regenerar o kit."""
-    raw_layout = next(
-        (item for item in revision.kit if isinstance(item, dict) and item.get("id") == layout_id),
-        None,
-    )
-    if raw_layout is None:
+    layout = resolve_layout(revision, layout_id)
+    if layout is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Layout desconhecido para esta revisão.",
         )
-    return LayoutSpec.model_validate(raw_layout)
+    return layout
 
 
 def _validated_content(body: DocumentBody, request: Request) -> ContentSpec:

@@ -1,5 +1,6 @@
 import type { JSX } from "react"
 import type { LayerOverride, LayoutSpec } from "../api/types"
+import type { AddedElementKind } from "./EditorPage"
 import {
   editorElements,
   elementGlyph,
@@ -16,6 +17,9 @@ interface LayerPanelProps {
   onSelect(id: string): void
   onPatch(id: string, patch: Partial<LayerOverride>): void
   onResetAll(): void
+  onAdd(kind: AddedElementKind): void
+  onDelete(id: string): void
+  onDuplicate(id: string): void
 }
 
 function ordered(elements: EditorElement[], overrides: Record<string, LayerOverride>) {
@@ -32,6 +36,9 @@ export function LayerPanel({
   onSelect,
   onPatch,
   onResetAll,
+  onAdd,
+  onDelete,
+  onDuplicate,
 }: LayerPanelProps): JSX.Element {
   const elements = editorElements(layout)
   const main = ordered(elements.filter((element) => !isStructuralElement(element)), overrides)
@@ -77,6 +84,27 @@ export function LayerPanel({
         <span className="layer-count">{elements.length}</span>
       </div>
 
+      <details className="layer-add-menu">
+        <summary>+ Adicionar elemento</summary>
+        <div className="layer-add-options" role="group" aria-label="Elementos disponíveis">
+          <button type="button" aria-label="Adicionar texto" onClick={() => onAdd("text")}>
+            <span aria-hidden="true">T</span> Texto
+          </button>
+          <button type="button" aria-label="Adicionar assinatura" onClick={() => onAdd("signature")}>
+            <span aria-hidden="true">@</span> Assinatura
+          </button>
+          <button type="button" aria-label="Adicionar imagem" onClick={() => onAdd("image")}>
+            <span aria-hidden="true">IMG</span> Imagem
+          </button>
+          <button type="button" aria-label="Adicionar logo" onClick={() => onAdd("logo")}>
+            <span aria-hidden="true">BR</span> Logo
+          </button>
+          <button type="button" aria-label="Adicionar forma ou linha" onClick={() => onAdd("shape")}>
+            <span aria-hidden="true">□</span> Forma ou linha
+          </button>
+        </div>
+      </details>
+
       <ol className="layer-list">{main.map(renderLayer)}</ol>
 
       {structure.length > 0 ? (
@@ -87,6 +115,12 @@ export function LayerPanel({
       ) : null}
 
       <div className="layer-panel-footer">
+        {selected?.id.startsWith("user-") ? (
+          <div className="layer-item-actions" role="group" aria-label="Ações do elemento selecionado">
+            <button type="button" onClick={() => onDuplicate(selected.id)}>Duplicar</button>
+            <button type="button" onClick={() => onDelete(selected.id)}>Remover</button>
+          </div>
+        ) : null}
         <div className="layer-order" role="group" aria-label="Ordem do item selecionado">
           <span>Ordem</span>
           <button

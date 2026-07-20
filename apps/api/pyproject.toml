@@ -16,6 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.2", "ruff>=0.6"]
+translation = ["ctranslate2==4.8.1", "sentencepiece==0.2.2"]
 
 [project.scripts]
 brand-api = "brand_api.cli:app"

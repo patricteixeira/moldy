@@ -70,6 +70,23 @@ def test_playwright_exporter_importa_adapter_apenas_ao_exportar(
     client, compiled, tmp_path, monkeypatch
 ):
     ir, layout, content = _contracts(client, compiled)
+    content = ContentSpec(
+        layout_id=content.layout_id,
+        brand_revision_id=content.brand_revision_id,
+        values={
+            **content.values,
+            "user-note-1": {"kind": "text", "text": "Segunda voz"},
+        },
+        added_slots=[
+            {
+                "id": "user-note-1",
+                "kind": "text",
+                "role": "heading",
+                "area": [48, 700, 400, 120],
+                "required": False,
+            }
+        ],
+    )
     checks = run_static_checks(ir, layout, content, tmp_path)
     calls = []
     fake_module = ModuleType("brand_runtime.export")
@@ -104,6 +121,8 @@ def test_playwright_exporter_importa_adapter_apenas_ao_exportar(
     )
 
     assert calls
+    assert [slot.id for slot in calls[0][1]["layout"].slots] == ["headline", "logo"]
+    assert [slot.id for slot in calls[0][1]["content"].added_slots] == ["user-note-1"]
     assert outcome == ExportOutcome(path=out_path, checks=checks)
 
 

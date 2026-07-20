@@ -19,6 +19,7 @@ class Settings(BaseModel):
     fake_exporter: bool = False
     render_dist: Path | None = None
     font_fetch_base_url: str | None = None
+    translation_model_dir: Path | None = None
     max_upload_bytes: int = Field(default=100 * 2**20, gt=0)
     max_image_pixels: int = Field(default=40_000_000, gt=0)
 
@@ -53,6 +54,10 @@ class Settings(BaseModel):
         raw_render_dist = os.environ.get("BRANDRT_RENDER_DIST")
         render_dist = Path(raw_render_dist) if raw_render_dist else None
         font_fetch_base_url = os.environ.get("BRANDRT_FONT_FETCH_BASE_URL", "").strip() or None
+        raw_translation_model_dir = os.environ.get("BRANDRT_TRANSLATION_MODEL_DIR", "").strip()
+        translation_model_dir = (
+            Path(raw_translation_model_dir) if raw_translation_model_dir else None
+        )
         try:
             max_upload_bytes = int(os.environ.get("BRANDRT_MAX_UPLOAD_BYTES", str(100 * 2**20)))
             max_image_pixels = int(os.environ.get("BRANDRT_MAX_IMAGE_PIXELS", "40000000"))
@@ -67,6 +72,7 @@ class Settings(BaseModel):
                 fake_exporter=fake_exporter,
                 render_dist=render_dist,
                 font_fetch_base_url=font_fetch_base_url,
+                translation_model_dir=translation_model_dir,
                 max_upload_bytes=max_upload_bytes,
                 max_image_pixels=max_image_pixels,
             )

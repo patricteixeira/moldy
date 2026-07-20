@@ -35,10 +35,12 @@ def test_settings_from_env(monkeypatch, tmp_path):
     monkeypatch.setenv("BRANDRT_DATABASE_URL", TEST_DB_URL)
     monkeypatch.setenv("BRANDRT_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("BRANDRT_FAKE_EXPORTER", "1")
+    monkeypatch.setenv("BRANDRT_TRANSLATION_MODEL_DIR", str(tmp_path / "translation"))
     settings = Settings.from_env()
     assert settings.data_dir == tmp_path
     assert settings.fake_exporter is True
     assert settings.storage_dir == tmp_path / "storage"
+    assert settings.translation_model_dir == tmp_path / "translation"
 
 
 def test_settings_from_env_exige_database_url(monkeypatch):

@@ -224,6 +224,8 @@ export interface ContentSpec {
   values: Record<string, SlotValue>;
   overrides?: Record<string, LayerOverride>;
   surface?: SurfaceStyle | null;
+  addedSlots?: Slot[];
+  addedLayers?: ShapeLayer[];
 }
 
 export const SURFACE_KINDS = [

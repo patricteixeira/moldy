@@ -7,6 +7,8 @@ import type {
   ContentSpec,
   LayerOverride,
   LayoutSpec,
+  ShapeLayer,
+  Slot,
   SlotValue,
   SurfaceStyle,
 } from "../api/types"
@@ -16,6 +18,7 @@ import { Preview } from "../render/Preview"
 import { ExportControls } from "./ExportControls"
 import { LayerPanel } from "./LayerPanel"
 import { SlotForm } from "./SlotForm"
+import { materializeContentLayout } from "./contentLayout"
 import { clearEditorDraft, loadEditorDraft, saveEditorDraft } from "./draftStorage"
 import { directionApplication } from "./direction"
 import { exactOccurrenceCount } from "./emphasis"
@@ -29,6 +32,8 @@ interface EditorData {
   brandIr: BrandIr
   layouts: LayoutSpec[]
 }
+
+export type AddedElementKind = "text" | "signature" | "image" | "logo" | "shape"
 
 function initialSelection(layout: LayoutSpec): string | null {
   return (
@@ -57,6 +62,8 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
   const [values, setValues] = useState<Record<string, SlotValue>>({})
   const [overrides, setOverrides] = useState<Record<string, LayerOverride>>({})
   const [surface, setSurface] = useState<SurfaceStyle | null>(null)
+  const [addedSlots, setAddedSlots] = useState<Slot[]>([])
+  const [addedLayers, setAddedLayers] = useState<ShapeLayer[]>([])
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null)
   const [zoom, setZoom] = useState(50)
   const [error, setError] = useState<string | null>(null)
@@ -72,6 +79,8 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     setValues({})
     setOverrides({})
     setSurface(null)
+    setAddedSlots([])
+    setAddedLayers([])
     setSelectedLayerId(null)
     setUploading(false)
     setExporting(false)
@@ -92,15 +101,26 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
         setData({ brandIr, layouts })
         if (activeLayout) {
           const stored = loadEditorDraft(revisionId, activeLayout)
-          const sample = placeholderContent(activeLayout, revisionId, brandIr.brand.name)
+          const sample = placeholderContent(activeLayout, revisionId, brandIr)
           const hasStoredDraft =
             Object.keys(stored.values).length > 0 ||
             Object.keys(stored.overrides).length > 0 ||
-            stored.surface !== null
+            stored.surface !== null ||
+            stored.addedSlots.length > 0 ||
+            stored.addedLayers.length > 0
           setValues(hasStoredDraft ? stored.values : sample.values)
           setOverrides(hasStoredDraft ? stored.overrides : (sample.overrides ?? {}))
           setSurface(hasStoredDraft ? stored.surface : null)
-          setSelectedLayerId(initialSelection(activeLayout))
+          setAddedSlots(hasStoredDraft ? stored.addedSlots : (sample.addedSlots ?? []))
+          setAddedLayers(hasStoredDraft ? stored.addedLayers : (sample.addedLayers ?? []))
+          setSelectedLayerId(
+            initialSelection(
+              materializeContentLayout(activeLayout, {
+                addedSlots: hasStoredDraft ? stored.addedSlots : sample.addedSlots,
+                addedLayers: hasStoredDraft ? stored.addedLayers : sample.addedLayers,
+              }),
+            ),
+          )
         }
         setDraftReady(true)
       })
@@ -126,9 +146,22 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
   const contentSpec = useMemo<ContentSpec | null>(
     () =>
       revisionId && layout
-        ? { layoutId: layout.id, brandRevisionId: revisionId, values, overrides, surface }
+        ? {
+            layoutId: layout.id,
+            brandRevisionId: revisionId,
+            values,
+            overrides,
+            surface,
+            addedSlots,
+            addedLayers,
+          }
         : null,
-    [layout, overrides, revisionId, surface, values],
+    [addedLayers, addedSlots, layout, overrides, revisionId, surface, values],
+  )
+
+  const activeLayout = useMemo(
+    () => (layout && contentSpec ? materializeContentLayout(layout, contentSpec) : null),
+    [contentSpec, layout],
   )
 
   const previewContentSpec = useMemo<ContentSpec | null>(() => {
@@ -150,8 +183,18 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
 
   useEffect(() => {
     if (!draftReady || !revisionId || !layout) return
-    setDraftSaved(saveEditorDraft(revisionId, layout.id, values, overrides, surface))
-  }, [draftReady, layout, overrides, revisionId, surface, values])
+    setDraftSaved(
+      saveEditorDraft(
+        revisionId,
+        layout.id,
+        values,
+        overrides,
+        surface,
+        addedSlots,
+        addedLayers,
+      ),
+    )
+  }, [addedLayers, addedSlots, draftReady, layout, overrides, revisionId, surface, values])
 
   if (error) {
     return (
@@ -169,7 +212,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     )
   }
 
-  if (!layout || !contentSpec || !previewContentSpec || !revisionId) {
+  if (!layout || !activeLayout || !contentSpec || !previewContentSpec || !revisionId) {
     return (
       <main id="main-content" className="editor-page editor-state-page">
         <p role="alert">Modelo não encontrado neste kit.</p>
@@ -218,20 +261,168 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
   }
 
   const restoreComposition = (): void => {
-    const sample = placeholderContent(layout, revisionId, data.brandIr.brand.name)
+    const sample = placeholderContent(layout, revisionId, data.brandIr)
     clearEditorDraft(revisionId, layout.id)
     setValues(sample.values)
     setOverrides(sample.overrides ?? {})
     setSurface(null)
-    setSelectedLayerId(initialSelection(layout))
+    setAddedSlots(sample.addedSlots ?? [])
+    setAddedLayers(sample.addedLayers ?? [])
+    setSelectedLayerId(initialSelection(materializeContentLayout(layout, sample)))
     setDraftSaved(true)
   }
 
-  const selectedElement = findEditorElement(layout, selectedLayerId)
+  const nextElementId = (prefix: string): string => {
+    const ids = new Set([
+      ...activeLayout.slots.map((slot) => slot.id),
+      ...(activeLayout.lockedLayers ?? []).map((layer) => layer.id),
+    ])
+    let index = 1
+    while (ids.has(`user-${prefix}-${index}`)) index += 1
+    return `user-${prefix}-${index}`
+  }
+
+  const addElement = (kind: AddedElementKind): void => {
+    const { widthPx: width, heightPx: height, safeAreaPx: safe } = layout.canvas
+    const captionRole = data.brandIr.roles.caption ? "caption" : "body"
+    const bodyRole = data.brandIr.roles.body ? "body" : (Object.keys(data.brandIr.roles)[0] ?? "body")
+    const accentToken =
+      (data.brandIr.colors["color.secondary"] && "color.secondary") ||
+      (data.brandIr.colors["color.primary"] && "color.primary") ||
+      (data.brandIr.colors["color.text"] && "color.text") ||
+      Object.keys(data.brandIr.colors)[0] ||
+      "color.text"
+
+    if (kind === "shape") {
+      const id = nextElementId("shape")
+      setAddedLayers((current) => [
+        ...current,
+        {
+          id,
+          kind: "shape",
+          shape: "rectangle",
+          area: [safe, Math.round(height * 0.5), Math.round(width * 0.32), 6],
+          colorToken: accentToken,
+          opacity: 1,
+          zIndex: 6,
+        },
+      ])
+      setSelectedLayerId(id)
+      return
+    }
+
+    const prefix = kind === "signature" ? "signature" : kind
+    const id = nextElementId(prefix)
+    let slot: Slot
+    let value: SlotValue | null = null
+    if (kind === "text" || kind === "signature") {
+      const signature = kind === "signature"
+      slot = {
+        id,
+        kind: "text",
+        role: signature ? captionRole : bodyRole,
+        area: signature
+          ? [safe, height - safe - Math.round(height * 0.06), Math.round(width * 0.48), Math.round(height * 0.05)]
+          : [safe, Math.round(height * 0.42), Math.round(width * 0.62), Math.round(height * 0.18)],
+        fit: "shrink-within-role-range",
+        required: false,
+        maxChars: signature ? 72 : 320,
+        zIndex: 10,
+        ...(signature ? { letterSpacingEm: 0.08 } : {}),
+      }
+      const handle = data.brandIr.brand.name
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("pt-BR")
+        .replace(/[^a-z0-9]+/g, "")
+      value = {
+        kind: "text",
+        text: signature ? `@${handle || "sua-marca"}` : "Novo bloco de texto",
+      }
+    } else if (kind === "image") {
+      slot = {
+        id,
+        kind: "image",
+        area: [safe, Math.round(height * 0.28), width - safe * 2, Math.round(height * 0.44)],
+        fit: "fixed",
+        required: false,
+        minResolution: [Math.round(width * 0.5), Math.round(height * 0.35)],
+        zIndex: 4,
+      }
+    } else {
+      const size = Math.max(96, Math.round(width * 0.16))
+      slot = {
+        id,
+        kind: "logo",
+        assetToken: "logo.primary",
+        area: [width - safe - size, height - safe - size, size, size],
+        fit: "fixed",
+        required: false,
+        zIndex: 9,
+      }
+    }
+    setAddedSlots((current) => [...current, slot])
+    if (value) setValues((current) => ({ ...current, [id]: value }))
+    setSelectedLayerId(id)
+  }
+
+  const removeElement = (elementId: string): void => {
+    if (!elementId.startsWith("user-")) return
+    setAddedSlots((current) => current.filter((slot) => slot.id !== elementId))
+    setAddedLayers((current) => current.filter((layer) => layer.id !== elementId))
+    setValues((current) => {
+      const { [elementId]: _removed, ...remaining } = current
+      return remaining
+    })
+    setOverrides((current) => {
+      const { [elementId]: _removed, ...remaining } = current
+      return remaining
+    })
+    setSelectedLayerId(initialSelection(layout))
+  }
+
+  const duplicateElement = (elementId: string): void => {
+    if (!elementId.startsWith("user-")) return
+    const slot = addedSlots.find((item) => item.id === elementId)
+    const layer = addedLayers.find((item) => item.id === elementId)
+    const prefix = elementId.split("-").slice(1, -1).join("-") || "element"
+    const id = nextElementId(prefix)
+    const moveArea = (area: [number, number, number, number]) => {
+      const [x, y, width, height] = area
+      return [
+        Math.max(0, Math.min(layout.canvas.widthPx - width, x + 24)),
+        Math.max(0, Math.min(layout.canvas.heightPx - height, y + 24)),
+        width,
+        height,
+      ] as [number, number, number, number]
+    }
+    if (slot) {
+      setAddedSlots((current) => [...current, { ...slot, id, area: moveArea(slot.area) }])
+      const value = values[elementId]
+      if (value) setValues((current) => ({ ...current, [id]: { ...value } }))
+    } else if (layer) {
+      setAddedLayers((current) => [...current, { ...layer, id, area: moveArea(layer.area) }])
+    } else {
+      return
+    }
+    const sourceOverride = overrides[elementId]
+    if (sourceOverride) {
+      setOverrides((current) => ({
+        ...current,
+        [id]: {
+          ...sourceOverride,
+          ...(sourceOverride.area ? { area: moveArea(sourceOverride.area) } : {}),
+        },
+      }))
+    }
+    setSelectedLayerId(id)
+  }
+
+  const selectedElement = findEditorElement(activeLayout, selectedLayerId)
   const selectedArea = selectedElement
     ? elementArea(selectedElement, overrides[selectedElement.id])
     : null
-  const sampleOverrides = placeholderContent(layout, revisionId, data.brandIr.brand.name).overrides ?? {}
+  const sampleOverrides = placeholderContent(layout, revisionId, data.brandIr).overrides ?? {}
   const changedLayerCount = [
     ...new Set([...Object.keys(sampleOverrides), ...Object.keys(overrides)]),
   ].filter(
@@ -285,7 +476,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
           <p className="canvas-instruction">Escolha um item. Depois, arraste ou mude o tamanho.</p>
           <Preview
             brandIr={data.brandIr}
-            layoutSpec={layout}
+            layoutSpec={activeLayout}
             contentSpec={previewContentSpec}
             assetsBaseUrl={api.revisionAssetsBaseUrl(revisionId)}
             maxWidthPx={Math.round(layout.canvas.widthPx * (zoom / 100))}
@@ -297,17 +488,20 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
         </section>
 
         <LayerPanel
-          layout={layout}
+          layout={activeLayout}
           overrides={overrides}
           selectedId={selectedLayerId}
           onSelect={setSelectedLayerId}
           onPatch={patchOverride}
           onResetAll={restoreComposition}
+          onAdd={addElement}
+          onDelete={removeElement}
+          onDuplicate={duplicateElement}
         />
 
         <SlotForm
           brandIr={data.brandIr}
-          layout={layout}
+          layout={activeLayout}
           selectedId={selectedLayerId}
           values={values}
           overrides={overrides}
@@ -335,6 +529,8 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
           revisionId={revisionId}
           values={values}
           overrides={overrides}
+          addedSlots={addedSlots}
+          addedLayers={addedLayers}
           surface={surface}
           onPendingChange={setExporting}
         />
