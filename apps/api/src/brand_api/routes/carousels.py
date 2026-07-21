@@ -12,7 +12,13 @@ from sqlalchemy import select
 
 from brand_api.auth import require_token
 from brand_api.db import new_id
-from brand_api.layout_catalog import resolve_layout
+from brand_api.carousel_composition import (
+    CarouselCompositionInput,
+    compose_carousel_sequence,
+    explain_carousel_choice,
+    extract_numeric_tokens,
+)
+from brand_api.layout_catalog import current_layouts, resolve_layout
 from brand_api.models import BrandRevision, Carousel, CarouselSlide, Document, Job
 from brand_api.revision_ir import revision_brand_ir
 from brand_api.routes.documents import DocumentBody, _validated_content
@@ -93,12 +99,10 @@ def _slide_role(position: int, total: int) -> SlideRole:
 
 
 def _layout_for_position(
-    layouts: dict[str, LayoutSpec],
     revision: BrandRevision,
     profile: CarouselProfile,
     slide: CarouselSlideInput,
-    position: int,
-    total: int,
+    automatic_layout: LayoutSpec,
 ) -> LayoutSpec:
     if slide.layout_id is not None:
         selected = resolve_layout(revision, slide.layout_id)
@@ -116,11 +120,7 @@ def _layout_for_position(
                 ),
             )
         return selected
-    role = _slide_role(position, total)
-    if role == "content":
-        variant = "a" if position % 2 == 0 else "b"
-        return layouts[f"carousel-content-{variant}-{profile}"]
-    return layouts[f"carousel-{role}-{profile}"]
+    return automatic_layout
 
 
 def _signature_override(
@@ -206,20 +206,11 @@ _TEMPLATE_TEXT_DEFAULTS = {
     "caption": "DETALHE DA SEQUÊNCIA",
     "issue": "EDIÇÃO 01 · 2026",
     "period": "PERÍODO · 2026",
-    "metric": "82%",
-    "delta": "+18 PONTOS",
-    "source": "FONTE: ADICIONE A ORIGEM DOS DADOS.",
     "label-one": "RESULTADO ATUAL",
     "label-two": "PERÍODO ANTERIOR",
     "label-three": "PONTO DE PARTIDA",
     "label-left": "ANTES",
     "label-right": "DEPOIS",
-    "value-left": "34%",
-    "value-right": "71%",
-    "metric-one": "48",
-    "metric-two": "73%",
-    "metric-three": "2,4×",
-    "price": "R$ 189",
     "url": "produto.exemplo/interface",
     "stage-one": "01\nCONTEXTO",
     "stage-two": "02\nIDEIA",
@@ -283,7 +274,9 @@ def _template_values(
     """Adapta o conteúdo simples do carrossel ao vocabulário de qualquer template."""
     values: dict[str, Any] = {}
     blocks = [block.strip() for block in slide.text_blocks if block.strip()]
+    numeric_tokens = extract_numeric_tokens(slide.headline, *blocks, slide.cta)
     block_index = 0
+    numeric_index = 0
     headline_ids = {
         "headline",
         "title",
@@ -315,6 +308,24 @@ def _template_values(
             text = slide.kicker.strip() or f"SLIDE {position:02d} · {total:02d}"
         elif slot_id == "cta":
             text = slide.cta.strip() or (blocks[-1] if blocks else "CONTINUE A CONVERSA")
+        elif slot_id in {
+            "metric",
+            "delta",
+            "value-left",
+            "value-right",
+            "metric-one",
+            "metric-two",
+            "metric-three",
+            "price",
+        }:
+            text = (
+                numeric_tokens[numeric_index % len(numeric_tokens)]
+                if numeric_tokens
+                else (blocks[block_index % len(blocks)] if blocks else slide.headline.strip())
+            )
+            numeric_index += 1
+        elif slot_id == "source":
+            text = slide.kicker.strip() or slide.cta.strip() or (blocks[-1] if blocks else "")
         elif slot_id.startswith("body") or slot.role == "body":
             text = blocks[block_index % len(blocks)] if blocks else slide.headline.strip()
             block_index += 1
@@ -428,6 +439,28 @@ def _carousel_response(session, carousel: Carousel) -> dict[str, Any]:
         layout = resolve_layout(revision, document.layout_id)
         if layout is None:  # pragma: no cover - documento criado pelo próprio endpoint
             raise RuntimeError("O slide perdeu seu layout interno.")
+        source = CarouselSlideInput.model_validate(slide.source)
+        role = _slide_role(slide.position, len(slides))
+        composition = (
+            {
+                "mode": "manual",
+                "reasonPt": "Este modelo foi escolhido manualmente para o slide.",
+            }
+            if source.layout_id is not None
+            else {
+                "mode": "automatic",
+                "reasonPt": explain_carousel_choice(
+                    layout,
+                    role,
+                    CarouselCompositionInput(
+                        headline=source.headline,
+                        text_blocks=tuple(source.text_blocks),
+                        cta=source.cta,
+                        image_sha256=source.image_sha256,
+                    ),
+                ),
+            }
+        )
         serialized.append(
             {
                 "id": slide.id,
@@ -439,6 +472,7 @@ def _carousel_response(session, carousel: Carousel) -> dict[str, Any]:
                 "layout": layout.model_dump(mode="json", by_alias=True),
                 "content": document.content,
                 "checks": document.checks,
+                "composition": composition,
             }
         )
     return {
@@ -545,8 +579,45 @@ def create_carousel(body: CarouselCreateBody, request: Request) -> dict[str, Any
         if revision is None:
             raise HTTPException(status_code=404, detail="Revisão de marca não encontrada.")
         ir = revision_brand_ir(revision)
-        generated = generate_carousel_layouts(ir, body.profile)
-        layouts = {layout.id: layout for layout in generated}
+        matching_layouts = [
+            layout
+            for layout in current_layouts(revision)
+            if layout.profile == body.profile and layout.template_ref is not None
+        ]
+        if not matching_layouts:
+            matching_layouts = [
+                layout for layout in current_layouts(revision) if layout.profile == body.profile
+            ]
+        known_layout_ids = {layout.id for layout in matching_layouts}
+        matching_layouts.extend(
+            layout
+            for layout in generate_carousel_layouts(ir, body.profile)
+            if layout.id not in known_layout_ids
+        )
+        try:
+            automatic_choices = compose_carousel_sequence(
+                ir,
+                matching_layouts,
+                [
+                    CarouselCompositionInput(
+                        headline=slide.headline,
+                        text_blocks=tuple(slide.text_blocks),
+                        cta=slide.cta,
+                        image_sha256=slide.image_sha256,
+                    )
+                    for slide in body.slides
+                ],
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(exc),
+            ) from exc
+        if len(automatic_choices) != len(body.slides):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="O kit desta marca não contém modelos para o formato escolhido.",
+            )
         carousel = Carousel(
             id=new_id("carousel"),
             brand_revision_id=revision.id,
@@ -557,14 +628,15 @@ def create_carousel(body: CarouselCreateBody, request: Request) -> dict[str, Any
         session.add(carousel)
         session.flush()
         total = len(body.slides)
-        for position, source in enumerate(body.slides, start=1):
+        for position, (source, automatic) in enumerate(
+            zip(body.slides, automatic_choices, strict=True),
+            start=1,
+        ):
             layout = _layout_for_position(
-                layouts,
                 revision,
                 body.profile,
                 source,
-                position,
-                total,
+                automatic.layout,
             )
             _validate_slide_assets(layout, source, request)
             content = _validated_content(

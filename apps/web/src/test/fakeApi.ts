@@ -441,6 +441,12 @@ export function fakeCarousel(
         values: { headline: { kind: "text", text: source.headline } },
       },
       checks: [],
+      composition: {
+        mode: source.layoutId ? "manual" : "automatic",
+        reasonPt: source.layoutId
+          ? "Este modelo foi escolhido manualmente para o slide."
+          : "A composição respeita o papel deste slide na sequência.",
+      },
     })),
   }
 }

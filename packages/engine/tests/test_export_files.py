@@ -22,7 +22,7 @@ from brand_runtime.export import (  # noqa: E402
     normalize_pdf,
 )
 from brand_runtime.kit.generator import generate_kit  # noqa: E402
-from brand_runtime.kit.models import ContentSpec, ImageValue, TextValue  # noqa: E402
+from brand_runtime.kit.models import ContentSpec, ImageValue, Slot, TextValue  # noqa: E402
 from tests.test_generator import _ir  # noqa: E402
 
 
@@ -71,6 +71,42 @@ def test_lote_png_publica_toda_a_sequencia(brand_package, render_dist, tmp_path)
     assert all(result.out_path.exists() for result in results)
     assert all(Image.open(result.out_path).size == (1080, 1080) for result in results)
     assert results[0].out_path.read_bytes() != results[1].out_path.read_bytes()
+
+
+def test_lote_png_materializa_elemento_adicionado_uma_unica_vez(
+    brand_package,
+    render_dist,
+    tmp_path,
+):
+    """O segundo Guard do lote recebe o modelo-fonte, evitando duplicar elementos livres."""
+    ir, layout, content = _statement(brand_package, "Com assinatura")
+    content = ContentSpec(
+        layout_id=layout.id,
+        brand_revision_id=ir.revision.id,
+        values={
+            **content.values,
+            "user-signature-1": TextValue(text="@marca"),
+        },
+        added_slots=[
+            Slot(
+                id="user-signature-1",
+                kind="text",
+                role="caption",
+                area=(72, 1010, 300, 24),
+                required=False,
+            )
+        ],
+    )
+
+    results = export_png_batch(
+        ir,
+        [(layout, content, tmp_path / "with-signature.png")],
+        brand_package,
+        render_dist,
+    )
+
+    assert len(results) == 1
+    assert results[0].out_path.exists()
 
 
 def test_png_renderiza_slot_de_imagem_servido_localmente(brand_package, render_dist, tmp_path):

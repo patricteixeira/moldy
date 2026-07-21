@@ -513,6 +513,10 @@ export interface CarouselSlide {
   layout: LayoutSpec
   content: ContentSpec
   checks: GuardCheck[]
+  composition: {
+    mode: "automatic" | "manual"
+    reasonPt: string
+  }
 }
 
 export interface Carousel {

@@ -101,6 +101,23 @@ it("mostra os modelos individuais compatíveis e permite escolher um por slide",
   expect(screen.getAllByText("Tipográfico editorial").length).toBeGreaterThan(0)
 })
 
+it("usa composição inteligente por padrão e permite retomá-la depois de uma escolha manual", async () => {
+  const user = userEvent.setup()
+  renderCarousel(fakeClient())
+
+  const automatic = await screen.findByRole("button", { name: "Usar composição inteligente" })
+  expect(automatic).toHaveAttribute("aria-pressed", "true")
+
+  const manual = screen.getByRole("button", { name: "Usar Editorial claro" })
+  await user.click(manual)
+  expect(manual).toHaveAttribute("aria-pressed", "true")
+  expect(automatic).toHaveAttribute("aria-pressed", "false")
+
+  await user.click(automatic)
+  expect(automatic).toHaveAttribute("aria-pressed", "true")
+  expect(screen.getByText(/Sem foto, não escolhe modelos fotográficos/)).toBeInTheDocument()
+})
+
 it("mostra o modelo completo ao passar o mouse ou focar o cartão", async () => {
   const user = userEvent.setup()
   renderCarousel(fakeClient())
@@ -219,6 +236,7 @@ it("envia quantidade, conteúdo e uma das seis posições de assinatura", async 
       slides: expect.arrayContaining([
         expect.objectContaining({
           headline: "Abertura",
+          layoutId: null,
           backgroundColorToken: null,
           textColorToken: null,
           logoAssetToken: null,

@@ -54,24 +54,29 @@ def test_carousel_derives_cover_content_closing_and_signature(client, compiled):
         "content",
         "closing",
     ]
-    assert [slide["layoutId"] for slide in carousel["slides"]] == [
-        "carousel-cover-post-4x5",
-        "carousel-content-a-post-4x5",
-        "carousel-content-b-post-4x5",
-        "carousel-content-a-post-4x5",
-        "carousel-closing-post-4x5",
-    ]
+    assert all(slide["composition"]["mode"] == "automatic" for slide in carousel["slides"])
+    assert all(slide["composition"]["reasonPt"] for slide in carousel["slides"])
+    assert all(slide["layout"]["templateRef"] is not None for slide in carousel["slides"])
+    assert all(
+        not any(slot["kind"] == "image" for slot in slide["layout"]["slots"])
+        for slide in carousel["slides"]
+    )
+    assert all(
+        current["layoutId"] != following["layoutId"]
+        for current, following in zip(carousel["slides"], carousel["slides"][1:])
+    )
     second = carousel["slides"][1]
-    assert second["content"]["values"]["body-1"]["text"] == "Primeiro argumento."
-    assert second["content"]["values"]["body-2"]["text"] == "Segundo argumento."
-    assert second["content"]["overrides"]["signature"]["area"] == [580, 80, 420, 32]
-    assert second["content"]["overrides"]["signature"]["textAlign"] == "right"
+    rendered_text = {
+        value["text"] for value in second["content"]["values"].values() if value["kind"] == "text"
+    }
+    assert "Primeiro argumento." in rendered_text
+    assert "Segundo argumento." in rendered_text
     cover = carousel["slides"][0]
     assert cover["source"]["backgroundColorToken"] == "color.primary"
     assert cover["source"]["textColorToken"] == "color.background"
     assert cover["source"]["logoAssetToken"] == "logo.primary"
     assert cover["content"]["backgroundColorToken"] == "color.primary"
-    assert cover["content"]["assetBindings"] == {"logo": "logo.primary"}
+    assert "logo.primary" in cover["content"]["assetBindings"].values()
     assert all(
         override["colorToken"] == "color.background"
         for slot_id, override in cover["content"]["overrides"].items()
@@ -111,11 +116,38 @@ def test_carousel_accepts_individual_kit_templates_per_slide(client, compiled):
     carousel = response.json()
     assert [slide["layoutId"] for slide in carousel["slides"]] == selected
     assert [slide["source"]["layoutId"] for slide in carousel["slides"]] == selected
+    assert all(slide["composition"]["mode"] == "manual" for slide in carousel["slides"])
     assert all(
         slide["layout"]["templateRef"]["packageId"] == "typographic-editorial"
         for slide in carousel["slides"]
     )
     assert carousel["slides"][0]["content"]["values"]["headline"]["text"] == ("Ideia do slide 1")
+
+
+def test_automatic_composition_uses_real_numbers_in_data_layouts(client, compiled):
+    slides = _slides(3)
+    slides[1]["headline"] = "De 34% para 71%"
+    slides[1]["textBlocks"] = ["O resultado cresceu 37 pontos no período."]
+
+    response = client.post(
+        "/v1/carousels",
+        json={
+            "brandRevisionId": compiled["brandRevisionId"],
+            "name": "Evidência real",
+            "profile": "post-4x5",
+            "slides": slides,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    evidence = response.json()["slides"][1]
+    assert evidence["layout"]["templateRef"]["packageId"] == "data-evidence"
+    rendered = " ".join(
+        value["text"] for value in evidence["content"]["values"].values() if value["kind"] == "text"
+    )
+    assert "34%" in rendered
+    assert "71%" in rendered
+    assert "82%" not in rendered
 
 
 def test_carousel_slide_can_be_edited_without_changing_its_position_or_template(client, compiled):

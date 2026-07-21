@@ -583,12 +583,12 @@ def export_png_batch(
     if any(out_path.suffix.casefold() != ".png" for _, _, out_path in documents):
         raise ValueError("Todos os arquivos do lote precisam terminar em .png.")
 
-    prepared: list[tuple[LayoutSpec, ContentSpec, Path]] = []
+    prepared: list[tuple[LayoutSpec, LayoutSpec, ContentSpec, Path]] = []
     for layout, content, out_path in documents:
         static_verdict = GuardVerdict(checks=run_static_checks(ir, layout, content, assets_dir))
         if _has_blocked(static_verdict):
             raise ExportBlocked(static_verdict)
-        prepared.append((materialize_content_layout(layout, content), content, out_path))
+        prepared.append((layout, materialize_content_layout(layout, content), content, out_path))
 
     try:
         from playwright.sync_api import Error as PlaywrightError
@@ -599,7 +599,7 @@ def export_png_batch(
             "O extra de export não está instalado; instale `.[export]` e o Chromium."
         ) from exc
 
-    first_layout = prepared[0][0]
+    first_layout = prepared[0][1]
     results: list[ExportResult] = []
     with tempfile.TemporaryDirectory(prefix="brandrt-render-") as temporary:
         staging = stage_site(render_dist, assets_dir, Path(temporary) / "site")
@@ -635,7 +635,7 @@ def export_png_batch(
                         "sessionStorage.getItem('__brandrt_payload__'));"
                     )
 
-                    for active_layout, content, out_path in prepared:
+                    for source_layout, active_layout, content, out_path in prepared:
                         page.set_viewport_size(
                             {
                                 "width": active_layout.canvas.width_px,
@@ -664,7 +664,7 @@ def export_png_batch(
                         report = _read_guard_report(page)
                         verdict = build_guard_verdict(
                             ir,
-                            active_layout,
+                            source_layout,
                             content,
                             assets_dir,
                             report,
