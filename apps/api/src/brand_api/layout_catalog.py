@@ -19,15 +19,24 @@ _CAROUSEL_LAYOUT_ID = re.compile(r"^carousel-(?:cover|content-[ab]|closing)-(pos
 def public_kit(revision: BrandRevision) -> list[dict]:
     """Sobrepõe templates versionados e prioriza sugestões sem alterar o snapshot."""
     persisted = list(revision.kit)
-    known_ids = {
-        item.get("id")
-        for item in persisted
-        if isinstance(item, dict) and isinstance(item.get("id"), str)
-    }
     ir = revision_brand_ir(revision)
-    generated = [layout for layout in generate_template_layouts(ir) if layout.id not in known_ids]
-    additions = [layout.model_dump(mode="json", by_alias=True) for layout in generated]
-    public = [*persisted, *additions]
+    generated = generate_template_layouts(ir)
+    generated_by_id = {layout.id: layout for layout in generated}
+    public: list[dict] = []
+    known_ids: set[str] = set()
+    for item in persisted:
+        layout_id = item.get("id") if isinstance(item, dict) else None
+        if isinstance(layout_id, str):
+            known_ids.add(layout_id)
+        replacement = generated_by_id.get(layout_id) if layout_id is not None else None
+        public.append(
+            replacement.model_dump(mode="json", by_alias=True) if replacement is not None else item
+        )
+    public.extend(
+        layout.model_dump(mode="json", by_alias=True)
+        for layout in generated
+        if layout.id not in known_ids
+    )
     candidates: list[LayoutSpec] = []
     for item in public:
         try:
@@ -56,13 +65,6 @@ def public_kit(revision: BrandRevision) -> list[dict]:
 
 def resolve_layout(revision: BrandRevision, layout_id: str) -> LayoutSpec | None:
     """Resolve um layout sem alterar o snapshot imutável da revisão."""
-    raw_layout = next(
-        (item for item in revision.kit if isinstance(item, dict) and item.get("id") == layout_id),
-        None,
-    )
-    if raw_layout is not None:
-        return LayoutSpec.model_validate(raw_layout)
-
     ir = revision_brand_ir(revision)
     template_layout = next(
         (layout for layout in generate_template_layouts(ir) if layout.id == layout_id),
@@ -70,6 +72,13 @@ def resolve_layout(revision: BrandRevision, layout_id: str) -> LayoutSpec | None
     )
     if template_layout is not None:
         return template_layout
+
+    raw_layout = next(
+        (item for item in revision.kit if isinstance(item, dict) and item.get("id") == layout_id),
+        None,
+    )
+    if raw_layout is not None:
+        return LayoutSpec.model_validate(raw_layout)
 
     match = _CAROUSEL_LAYOUT_ID.fullmatch(layout_id)
     if match is None:

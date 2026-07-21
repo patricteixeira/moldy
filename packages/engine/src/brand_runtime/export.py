@@ -569,3 +569,136 @@ def export_document(
 
     _atomic_write_bytes(out_path, data)
     return ExportResult(out_path=out_path, guard_verdict=verdict)
+
+
+def export_png_batch(
+    ir: BrandIR,
+    documents: list[tuple[LayoutSpec, ContentSpec, Path]],
+    assets_dir: Path,
+    render_dist: Path,
+) -> list[ExportResult]:
+    """Renderiza vários PNGs reutilizando um único Chromium e uma única origem."""
+    if not documents:
+        return []
+    if any(out_path.suffix.casefold() != ".png" for _, _, out_path in documents):
+        raise ValueError("Todos os arquivos do lote precisam terminar em .png.")
+
+    prepared: list[tuple[LayoutSpec, ContentSpec, Path]] = []
+    for layout, content, out_path in documents:
+        static_verdict = GuardVerdict(checks=run_static_checks(ir, layout, content, assets_dir))
+        if _has_blocked(static_verdict):
+            raise ExportBlocked(static_verdict)
+        prepared.append((materialize_content_layout(layout, content), content, out_path))
+
+    try:
+        from playwright.sync_api import Error as PlaywrightError
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        raise ExportError(
+            "O extra de export não está instalado; instale `.[export]` e o Chromium."
+        ) from exc
+
+    first_layout = prepared[0][0]
+    results: list[ExportResult] = []
+    with tempfile.TemporaryDirectory(prefix="brandrt-render-") as temporary:
+        staging = stage_site(render_dist, assets_dir, Path(temporary) / "site")
+        with serve_directory(staging) as base:
+            origin = urlsplit(base)
+            expected_origin = (origin.scheme, origin.hostname or "", origin.port or -1)
+            browser = None
+            context = None
+            page = None
+            try:
+                with sync_playwright() as playwright:
+                    browser = playwright.chromium.launch(args=list(DEFAULT_LAUNCH_ARGS))
+                    context = browser.new_context(
+                        viewport={
+                            "width": first_layout.canvas.width_px,
+                            "height": first_layout.canvas.height_px,
+                        },
+                        device_scale_factor=1,
+                    )
+                    page = context.new_page()
+                    page.set_default_timeout(_RENDER_TIMEOUT_MS)
+
+                    def route_request(route: Any) -> None:
+                        if _same_origin(route.request.url, expected_origin):
+                            route.continue_()
+                        else:
+                            route.abort()
+
+                    page.route("**/*", route_request)
+                    page.goto(base, wait_until="load", timeout=_RENDER_TIMEOUT_MS)
+                    page.add_init_script(
+                        "window.__PAYLOAD__ = JSON.parse("
+                        "sessionStorage.getItem('__brandrt_payload__'));"
+                    )
+
+                    for active_layout, content, out_path in prepared:
+                        page.set_viewport_size(
+                            {
+                                "width": active_layout.canvas.width_px,
+                                "height": active_layout.canvas.height_px,
+                            }
+                        )
+                        payload = build_payload(ir, active_layout, content, f"{base}/pkg")
+                        page.evaluate(
+                            "payload => sessionStorage.setItem('__brandrt_payload__', "
+                            "JSON.stringify(payload))",
+                            payload,
+                        )
+                        page.goto(
+                            f"{base}/render.html",
+                            wait_until="load",
+                            timeout=_RENDER_TIMEOUT_MS,
+                        )
+                        page.wait_for_function(
+                            "() => window.__RENDER_DONE__ === true || "
+                            "typeof window.__RENDER_ERROR__ === 'string'",
+                            timeout=_RENDER_TIMEOUT_MS,
+                        )
+                        render_error = page.evaluate("window.__RENDER_ERROR__")
+                        if render_error is not None:
+                            raise ExportError(f"O renderer recusou o payload: {render_error}")
+                        report = _read_guard_report(page)
+                        verdict = build_guard_verdict(
+                            ir,
+                            active_layout,
+                            content,
+                            assets_dir,
+                            report,
+                        )
+                        if _has_blocked(verdict):
+                            raise ExportBlocked(verdict)
+                        try:
+                            data = page.locator("#canvas").screenshot(
+                                type="png",
+                                animations="disabled",
+                                caret="hide",
+                                scale="css",
+                            )
+                        except Exception as exc:
+                            raise ExportError(
+                                "O Chromium não conseguiu gerar o arquivo exportado."
+                            ) from exc
+                        _atomic_write_bytes(out_path, data)
+                        results.append(ExportResult(out_path=out_path, guard_verdict=verdict))
+            except ExportError:
+                raise
+            except (PlaywrightTimeoutError, PlaywrightError, OSError) as exc:
+                raise ExportError(
+                    "O Chromium não conseguiu concluir o lote local em até 30 segundos."
+                ) from exc
+            finally:
+                if page is not None:
+                    with suppress(Exception):
+                        page.close()
+                if context is not None:
+                    with suppress(Exception):
+                        context.close()
+                if browser is not None:
+                    with suppress(Exception):
+                        browser.close()
+
+    return results

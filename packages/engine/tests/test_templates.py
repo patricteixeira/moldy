@@ -198,6 +198,26 @@ def test_compositions_have_distinct_structural_fingerprints(brand_package):
     ]
 
 
+def test_editorial_collage_empty_image_fields_keep_brand_chroma(brand_package):
+    package = editorial_collage_package(_ir(brand_package))
+    fallback_ids = {
+        "overlap-secondary-mat",
+        "cutout-photo-mat",
+        "contact-frame-two",
+        "contact-frame-three",
+    }
+    fallbacks = {
+        layer.id: layer
+        for composition in package.compositions
+        for layer in composition.layout.locked_layers
+        if layer.id in fallback_ids
+    }
+
+    assert set(fallbacks) == fallback_ids
+    assert all(layer.color_token == "color.primary" for layer in fallbacks.values())
+    assert all(0.1 <= layer.opacity <= 0.18 for layer in fallbacks.values())
+
+
 def test_template_compilation_is_deterministic_and_does_not_share_state(brand_package):
     ir = _ir(brand_package)
     first = template_packages(ir)

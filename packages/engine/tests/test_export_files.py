@@ -15,7 +15,12 @@ else:
 
 from PIL import Image  # noqa: E402
 
-from brand_runtime.export import ExportBlocked, export_document, normalize_pdf  # noqa: E402
+from brand_runtime.export import (  # noqa: E402
+    ExportBlocked,
+    export_document,
+    export_png_batch,
+    normalize_pdf,
+)
 from brand_runtime.kit.generator import generate_kit  # noqa: E402
 from brand_runtime.kit.models import ContentSpec, ImageValue, TextValue  # noqa: E402
 from tests.test_generator import _ir  # noqa: E402
@@ -49,6 +54,23 @@ def test_png_deterministico_bytes_identicos(brand_package, render_dist, tmp_path
     first = export_document(ir, layout, content, brand_package, render_dist, tmp_path / "a.png")
     second = export_document(ir, layout, content, brand_package, render_dist, tmp_path / "b.png")
     assert first.out_path.read_bytes() == second.out_path.read_bytes()
+
+
+def test_lote_png_publica_toda_a_sequencia(brand_package, render_dist, tmp_path):
+    """O caminho de carrossel produz todos os slides numa sessão compartilhada."""
+    ir, layout, first_content = _statement(brand_package, "Primeiro")
+    _ir_same, _layout_same, second_content = _statement(brand_package, "Segundo")
+    documents = [
+        (layout, first_content, tmp_path / "01.png"),
+        (layout, second_content, tmp_path / "02.png"),
+    ]
+
+    results = export_png_batch(ir, documents, brand_package, render_dist)
+
+    assert [result.out_path.name for result in results] == ["01.png", "02.png"]
+    assert all(result.out_path.exists() for result in results)
+    assert all(Image.open(result.out_path).size == (1080, 1080) for result in results)
+    assert results[0].out_path.read_bytes() != results[1].out_path.read_bytes()
 
 
 def test_png_renderiza_slot_de_imagem_servido_localmente(brand_package, render_dist, tmp_path):

@@ -3,6 +3,7 @@ import zipfile
 
 from PIL import Image
 
+from brand_api.exporters import FakeExporter
 from brand_api.worker import run_next_job
 
 
@@ -230,13 +231,38 @@ def test_carousel_export_publishes_ordered_png_zip(client, compiled):
 
     enqueued = client.post(f"/v1/carousels/{carousel_id}/exports", json={"format": "png"})
     assert enqueued.status_code == 202, enqueued.text
+    batch_calls = []
+
+    class BatchSpy(FakeExporter):
+        def export(self, **kwargs):
+            if kwargs["fmt"] == "png":
+                raise AssertionError("o worker não deve exportar um slide PNG por vez")
+            return super().export(**kwargs)
+
+        def export_png_batch(self, **kwargs):
+            batch_calls.append(kwargs["documents"])
+            return [
+                FakeExporter.export(
+                    self,
+                    ir=kwargs["ir"],
+                    layout=layout,
+                    content=content,
+                    assets_dir=kwargs["assets_dir"],
+                    fmt="png",
+                    out_path=out_path,
+                )
+                for layout, content, out_path in kwargs["documents"]
+            ]
+
     assert run_next_job(
         client.app.state.session_factory,
         storage=client.app.state.storage,
-        exporter=client.app.state.exporter,
+        exporter=BatchSpy(),
         settings=client.app.state.settings,
         heartbeat_seconds=0.05,
     )
+    assert len(batch_calls) == 1
+    assert len(batch_calls[0]) == 3
 
     job = client.get(f"/v1/jobs/{enqueued.json()['jobId']}")
     assert job.status_code == 200

@@ -66,6 +66,16 @@ class Exporter(Protocol):
         """Exporta um documento ou levanta ``ExportRejected``."""
         ...
 
+    def export_png_batch(
+        self,
+        *,
+        ir: BrandIR,
+        documents: list[tuple[LayoutSpec, ContentSpec, Path]],
+        assets_dir: Path,
+    ) -> list[ExportOutcome]:
+        """Exporta uma sequência PNG sem reinicializar o renderer por item."""
+        ...
+
 
 def _is_link(path: Path) -> bool:
     is_junction = getattr(os.path, "isjunction", None)
@@ -203,6 +213,16 @@ class NativeOfficeExporter:
             )
         return ExportOutcome(path=out_path, checks=checks)
 
+    def export_png_batch(
+        self,
+        *,
+        ir: BrandIR,
+        documents: list[tuple[LayoutSpec, ContentSpec, Path]],
+        assets_dir: Path,
+    ) -> list[ExportOutcome]:
+        """Recusa um formato que não pertence ao adapter Office."""
+        raise ValueError("O exportador Office não aceita lotes PNG.")
+
 
 class FakeExporter:
     """Exporter de teste sem Chromium; formatos Office usam o adapter real."""
@@ -244,6 +264,26 @@ class FakeExporter:
             path=out_path,
             checks=run_static_checks(ir, layout, content, assets_dir),
         )
+
+    def export_png_batch(
+        self,
+        *,
+        ir: BrandIR,
+        documents: list[tuple[LayoutSpec, ContentSpec, Path]],
+        assets_dir: Path,
+    ) -> list[ExportOutcome]:
+        """Mantém o mesmo contrato de lote na suíte que não inicia Chromium."""
+        return [
+            self.export(
+                ir=ir,
+                layout=layout,
+                content=content,
+                assets_dir=assets_dir,
+                fmt="png",
+                out_path=out_path,
+            )
+            for layout, content, out_path in documents
+        ]
 
 
 class PlaywrightExporter:
@@ -304,6 +344,33 @@ class PlaywrightExporter:
             checks=list(result.guard_verdict.checks),
         )
 
+    def export_png_batch(
+        self,
+        *,
+        ir: BrandIR,
+        documents: list[tuple[LayoutSpec, ContentSpec, Path]],
+        assets_dir: Path,
+    ) -> list[ExportOutcome]:
+        """Delega o carrossel ao renderer compartilhado do motor."""
+        from brand_runtime.export import ExportBlocked, export_png_batch
+
+        try:
+            results = export_png_batch(
+                ir=ir,
+                documents=documents,
+                assets_dir=assets_dir,
+                render_dist=self.render_dist,
+            )
+        except ExportBlocked as exc:
+            raise ExportRejected(list(exc.verdict.checks)) from exc
+        return [
+            ExportOutcome(
+                path=result.out_path,
+                checks=list(result.guard_verdict.checks),
+            )
+            for result in results
+        ]
+
 
 class DispatchingExporter:
     """Encaminha cada formato ao adapter responsável sem duplicar o worker."""
@@ -334,4 +401,18 @@ class DispatchingExporter:
             fmt=fmt,
             out_path=out_path,
             native_template_version=native_template_version,
+        )
+
+    def export_png_batch(
+        self,
+        *,
+        ir: BrandIR,
+        documents: list[tuple[LayoutSpec, ContentSpec, Path]],
+        assets_dir: Path,
+    ) -> list[ExportOutcome]:
+        """Encaminha sequências PNG diretamente ao adapter Chromium."""
+        return self.web.export_png_batch(
+            ir=ir,
+            documents=documents,
+            assets_dir=assets_dir,
         )

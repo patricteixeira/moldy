@@ -749,16 +749,25 @@ def run_next_job(
                 workdir_identity = workdir.resolve(strict=True)
                 serialized_checks: list[dict] = []
                 slide_paths: list[tuple[int, Path]] = []
-                for position, slide_document_id, layout, content in contracts:
-                    out_path = workdir / f"slide-{position:02d}.png"
-                    outcome = exporter.export(
-                        ir=ir,
-                        layout=layout,
-                        content=content,
-                        assets_dir=workdir,
-                        fmt="png",
-                        out_path=out_path,
-                    )
+                batch = [
+                    (layout, content, workdir / f"slide-{position:02d}.png")
+                    for position, _slide_document_id, layout, content in contracts
+                ]
+                outcomes = exporter.export_png_batch(
+                    ir=ir,
+                    documents=batch,
+                    assets_dir=workdir,
+                )
+                if len(outcomes) != len(contracts):
+                    raise RuntimeError("O renderer não devolveu todos os slides do carrossel.")
+                for contract, outcome, batch_item in zip(
+                    contracts,
+                    outcomes,
+                    batch,
+                    strict=True,
+                ):
+                    position, slide_document_id, _layout, _content = contract
+                    _batch_layout, _batch_content, out_path = batch_item
                     checks = _serialize_checks(outcome.checks)
                     if any(check["status"] == "blocked" for check in checks):
                         raise ExportRejected([GuardCheck.model_validate(check) for check in checks])

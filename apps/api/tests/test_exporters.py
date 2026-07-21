@@ -165,6 +165,52 @@ def test_playwright_exporter_converte_bloqueio_sem_perder_checks(
     assert raised.value.checks == [check]
 
 
+def test_playwright_exporter_encaminha_lote_png_em_uma_unica_chamada(
+    client, compiled, tmp_path, monkeypatch
+):
+    ir, layout, content = _contracts(client, compiled)
+    checks = run_static_checks(ir, layout, content, tmp_path)
+    calls = []
+    fake_module = ModuleType("brand_runtime.export")
+
+    class FakeBlocked(Exception):
+        pass
+
+    def fake_export_png_batch(*args, **kwargs):
+        calls.append((args, kwargs))
+        return [
+            SimpleNamespace(
+                out_path=out_path,
+                guard_verdict=SimpleNamespace(checks=checks),
+            )
+            for _layout, _content, out_path in kwargs["documents"]
+        ]
+
+    fake_module.ExportBlocked = FakeBlocked
+    fake_module.export_png_batch = fake_export_png_batch
+    monkeypatch.setitem(__import__("sys").modules, "brand_runtime.export", fake_module)
+    render_dist = tmp_path / "render-dist"
+    render_dist.mkdir()
+    (render_dist / "render.html").write_text("<!doctype html>", encoding="utf-8")
+    documents = [
+        (layout, content, tmp_path / "01.png"),
+        (layout, content, tmp_path / "02.png"),
+    ]
+
+    outcomes = PlaywrightExporter(render_dist).export_png_batch(
+        ir=ir,
+        documents=documents,
+        assets_dir=tmp_path,
+    )
+
+    assert len(calls) == 1
+    assert calls[0][1]["documents"] == documents
+    assert outcomes == [
+        ExportOutcome(path=tmp_path / "01.png", checks=checks),
+        ExportOutcome(path=tmp_path / "02.png", checks=checks),
+    ]
+
+
 def test_playwright_exporter_falha_cedo_sem_build_do_renderer(tmp_path):
     with pytest.raises(RuntimeError, match="render.html"):
         PlaywrightExporter(tmp_path / "render-dist-ausente")
@@ -183,6 +229,10 @@ def test_dispatcher_encaminha_web_e_office_sem_mudar_o_contrato(client, compiled
             out_path.write_bytes(b"ok")
             return ExportOutcome(out_path, [])
 
+        def export_png_batch(self, *, documents, **kwargs):
+            seen.append((self.name, "png-batch", len(documents)))
+            return [ExportOutcome(out_path, []) for _layout, _content, out_path in documents]
+
     exporter = DispatchingExporter(Spy("web"), Spy("office"))
     for fmt in ("png", "pptx"):
         exporter.export(
@@ -196,3 +246,12 @@ def test_dispatcher_encaminha_web_e_office_sem_mudar_o_contrato(client, compiled
         )
 
     assert seen == [("web", "png", None), ("office", "pptx", "v1")]
+
+    outcomes = exporter.export_png_batch(
+        ir=ir,
+        documents=[(layout, content, tmp_path / "01.png")],
+        assets_dir=tmp_path,
+    )
+
+    assert outcomes == [ExportOutcome(tmp_path / "01.png", [])]
+    assert seen[-1] == ("web", "png-batch", 1)
