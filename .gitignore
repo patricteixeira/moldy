@@ -17,3 +17,7 @@ playwright-report/
 
 # Materiais reais usados apenas como referência local de validação.
 exemplo/
+
+# Ativos tipográficos proprietários da edição oficial hospedada.
+# O ponto de injeção e sua documentação continuam versionados.
+apps/web/public/fonts/synapsis/*.woff2

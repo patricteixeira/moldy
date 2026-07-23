@@ -1,8 +1,8 @@
 # App web do brand-runtime
 
 Wizard de instalação, kit, editor por camadas, Modo Carrossel e aplicação de
-marca em Word. O chrome usa tipografia local do produto; as fontes da marca ficam
-contidas nas provas renderizadas.
+marca em Word. A instância oficial online usa Synapsis no chrome; instalações
+open source locais usam Archivo e não recebem a fonte proprietária.
 
 ```powershell
 cd apps/web
@@ -52,16 +52,43 @@ fora do caminho inicial.
 
 ## Direção visual
 
-O chrome do Molda é monocromático e editorial. Ele não herda cores da revisão
-ativa: a matéria da marca aparece apenas nas provas, amostras, canvas e arquivos
-exportados. Newsreader cria a voz editorial; Archivo organiza navegação,
-formulários e controles; a fonte monoespaçada fica restrita a medidas e valores.
-Superfícies são retas e grupos usam alinhamento e regras, sem cards decorativos.
+O chrome do Molda é editorial, estruturado por formas Bauhaus e dominado por
+Papel (`#F2EFE7`) e Grafite (`#202025`). Âmbar (`#C05518`) aparece apenas em
+pontos de atenção, seleção e ação. Ele não herda cores da revisão ativa: a
+matéria da marca aparece nas provas, amostras, canvas e arquivos exportados.
+Synapsis cria a voz da instância oficial online; Archivo preserva legibilidade e
+estrutura nas instalações open source locais; a fonte monoespaçada fica
+restrita a medidas e valores.
 
 A especificação vigente está em
-[`docs/design/2026-07-19-mesa-de-provas.md`](../../docs/design/2026-07-19-mesa-de-provas.md).
+[`docs/design/2026-07-23-oficina-bauhaus-editorial.md`](../../docs/design/2026-07-23-oficina-bauhaus-editorial.md).
 A matriz de breakpoints, interações e gates inspecionados está em
 [`docs/design/2026-07-19-validacao-visual.md`](../../docs/design/2026-07-19-validacao-visual.md).
+
+## Edição open source e edição oficial
+
+As duas edições compartilham o mesmo núcleo. A diferença está nos ativos de
+identidade e na operação:
+
+- a distribuição open source não contém a Synapsis e funciona sem requisições
+  quebradas, usando Archivo;
+- somente o deploy da instância oficial online operada pelo Digital Artisan
+  recebe os WOFF2 proprietários, ativa a família com
+  `VITE_SYNAPSIS_FONT_BASE_URL` e restringe seu carregamento à própria origem;
+- instalações independentes podem manter Archivo ou fornecer sua própria
+  tipografia sem alterar o núcleo do produto.
+
+Para uma publicação oficial com os arquivos em `public/fonts/synapsis`, use:
+
+```dotenv
+VITE_SYNAPSIS_FONT_BASE_URL=/fonts/synapsis
+```
+
+Uma URL de CDN também é aceita no deploy oficial, desde que permita o
+carregamento apenas pela instância online do Digital Artisan. Os WOFF2 e a marca
+Synapsis não fazem parte da licença open source do código. Seu uso é exclusivo
+nessa instância oficial:
+Copyright © 2026 Digital Artisan. Todos os direitos reservados.
 
 ## E2E
 

@@ -4,6 +4,8 @@ WORKDIR /src
 COPY packages/render packages/render
 RUN cd packages/render && npm ci && npm run build
 COPY apps/web apps/web
+ARG VITE_SYNAPSIS_FONT_BASE_URL=""
+ENV VITE_SYNAPSIS_FONT_BASE_URL=${VITE_SYNAPSIS_FONT_BASE_URL}
 RUN cd apps/web && npm ci && npm run build
 
 FROM nginx:1.30.3-alpine-slim@sha256:d5b51cfc7d55fc7a7bcf4d1d577b9c3738331df56d68f0b1d8ac9795b9470a5a

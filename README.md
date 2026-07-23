@@ -142,7 +142,14 @@ trabalho semanal:
   com capa, conteúdo e fechamento. Cada slide pode usar qualquer composição
   compatível, ser editado por inteiro e voltar à sequência sem perder ajustes.
   As mesmas oito sugestões do Kit aparecem primeiro, e a família melhor
-  classificada inicia a sequência.
+classificada inicia a sequência.
+
+Novos modelos entram primeiro num laboratório isolado de referências. O
+Template Corpus registra autoria e licença, valida os bytes, aponta estruturas
+repetidas ou apenas recoloridas e compara a gramática anotada com o catálogo
+atual. O relatório organiza a crítica, mas nunca promove um template
+automaticamente. Veja o [protocolo do corpus](docs/template-corpus.md) e o
+[ADR 0019](docs/adr/0019-laboratorio-isolado-de-referencias.md).
 - **Aplicar marca ao Word:** um `.docx` existente é analisado antes de qualquer
   mudança. Depois do consentimento, o worker cria uma nova cópia editável com
   estilos, hierarquia, margens, tabelas e logo da marca, preservando texto e
@@ -156,11 +163,12 @@ aplicação não destrutiva em Word está registrada na
 ## Interface web
 
 O app organiza a jornada em instalação da marca, kit de composições, carrossel,
-editor por camadas e aplicação de marca em Word. A linguagem **Mesa de Provas**
-usa um chrome monocromático de papel, tinta e grafite; cores da identidade ficam
-restritas às provas, amostras, canvas e arquivos exportados. Hierarquia, regras e
-espaço sustentam a composição sem accent, cards de SaaS ou sinais de devtool. A
-interface é responsiva e reduz o movimento quando solicitado pelo navegador.
+editor por camadas e aplicação de marca em Word. A linguagem **Oficina Bauhaus
+Editorial** usa Papel (`#F2EFE7`) e Grafite (`#202025`) como ambiente de trabalho.
+O Âmbar (`#C05518`) aparece somente em decisão, foco e manipulação. Regras,
+proporções, tipografia e formas elementares dão orientação sem cards de SaaS,
+decoração gratuita ou imitação de ferramentas criativas conhecidas. A interface
+é responsiva e reduz o movimento quando solicitado pelo navegador.
 
 No editor, qualquer camada pode ser arrastada, redimensionada e sangrada além
 do canvas. A direção confirmada da marca também pode propor uma estrutura e uma
@@ -171,12 +179,14 @@ separado em cinco famílias, continua disponível no mesmo painel.
 
 As transições e os comportamentos de rolagem usam GSAP como aprimoramento
 progressivo: conteúdo, navegação e ações continuam disponíveis sem depender da
-animação. As fontes da interface são servidas localmente pelo próprio app.
-A direção, os tokens dinâmicos, os contratos de motion e os critérios de qualidade
+animação. Instalações open source usam Archivo. Somente a instância oficial
+online operada pelo Digital Artisan injeta os WOFF2 protegidos da Synapsis,
+mantidos fora do Git e fora da licença open source do sistema.
+A direção, os tokens, os contratos de interação e os critérios de qualidade
 estão documentados em
-[`Mesa de Provas`](docs/design/2026-07-19-mesa-de-provas.md). A inspeção das
-telas renderizadas e as correções que nasceram dela estão registradas na
-[`validação visual`](docs/design/2026-07-19-validacao-visual.md).
+[`Oficina Bauhaus Editorial`](docs/design/2026-07-23-oficina-bauhaus-editorial.md).
+O documento anterior, [`Mesa de Provas`](docs/design/2026-07-19-mesa-de-provas.md),
+permanece como histórico de decisão.
 
 ## Estrutura do repositório
 
@@ -239,6 +249,10 @@ Os demais componentes têm instruções próprias:
   usado por integrações externas sem carregar nem incorporar o engine AGPL.
 - Documentação (`docs/`): **CC BY 4.0**
   ([`docs/LICENSE`](docs/LICENSE)) — pode ser adaptada com atribuição.
+- Synapsis e ativos de identidade: **proprietários** — não são abrangidos pela
+  AGPL e têm uso exclusivo na instância oficial online do Molda operada pelo
+  Digital Artisan
+  ([`aviso de uso`](apps/web/public/fonts/synapsis/PROPRIETARY-NOTICE.txt)).
 
 As fronteiras e alternativas estão registradas no
 [`ADR 0003`](docs/adr/0003-licencas-agpl-app-mit-schema.md). A ratificação final
