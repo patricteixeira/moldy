@@ -8,7 +8,7 @@ ARG VITE_SYNAPSIS_FONT_BASE_URL=""
 ENV VITE_SYNAPSIS_FONT_BASE_URL=${VITE_SYNAPSIS_FONT_BASE_URL}
 RUN cd apps/web && npm ci && npm run build
 
-FROM nginx:1.30.3-alpine-slim@sha256:d5b51cfc7d55fc7a7bcf4d1d577b9c3738331df56d68f0b1d8ac9795b9470a5a
+FROM nginx:1.31.3-alpine-slim@sha256:45b82ed5f285b90d63df07ba70430fdd8f25624b416617d9e6dc93412b2006dc
 
 COPY infra/docker/nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY infra/docker/validate-web-env.sh /docker-entrypoint.d/05-validate-web-env.sh
