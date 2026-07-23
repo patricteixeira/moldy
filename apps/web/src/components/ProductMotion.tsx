@@ -104,6 +104,27 @@ export function ProductMotion() {
           },
         })
       })
+
+      const editorialReveals = root.querySelectorAll<HTMLElement>(
+        ".kit-library-heading h2, .carousel-heading h1, .docx-brand-heading h1, .editor-guard-export h2",
+      )
+      editorialReveals.forEach((heading) => {
+        gsap.fromTo(
+          heading,
+          { opacity: 0.25, xPercent: -5 },
+          {
+            opacity: 1,
+            xPercent: 0,
+            ease: "none",
+            scrollTrigger: {
+              trigger: heading,
+              start: "top 88%",
+              end: "top 54%",
+              scrub: 0.55,
+            },
+          },
+        )
+      })
     },
     { dependencies: [pathname], revertOnUpdate: true },
   )

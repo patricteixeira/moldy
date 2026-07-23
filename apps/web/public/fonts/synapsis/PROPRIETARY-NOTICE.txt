@@ -1,0 +1,29 @@
+SYNAPSIS — AVISO DE USO PROPRIETÁRIO
+
+Copyright © 2026 Digital Artisan. Todos os direitos reservados.
+
+A fonte Synapsis é licenciada exclusivamente para carregamento e exibição na
+instância oficial online do Molda operada pelo Digital Artisan.
+
+A transferência técnica do arquivo para um navegador ou cache não concede ao
+destinatário licença para instalar, usar separadamente, modificar, converter,
+extrair, redistribuir, sublicenciar ou incorporar a fonte em outro site,
+aplicativo, documento, produto ou sistema.
+
+Nenhum direito sobre a fonte é concedido pela licença open source do código do
+Molda.
+
+SYNAPSIS — PROPRIETARY USE NOTICE
+
+Copyright © 2026 Digital Artisan. All rights reserved.
+
+Synapsis is licensed exclusively for loading and display within the official
+online Molda instance operated by Digital Artisan.
+
+Technical transfer of the file to a browser or cache does not grant the
+recipient a license to install, use separately, modify, convert, extract,
+redistribute, sublicense, or embed the font in any other website, application,
+document, product, or system.
+
+No rights to the font are granted under the open-source license covering the
+Molda code.

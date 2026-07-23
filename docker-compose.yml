@@ -130,6 +130,8 @@ services:
     build:
       context: .
       dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_SYNAPSIS_FONT_BASE_URL: ${VITE_SYNAPSIS_FONT_BASE_URL:-}
     environment:
       BRANDRT_API_TOKEN: ${BRANDRT_TOKEN:-brandrt-dev}
       NGINX_ENVSUBST_FILTER: ^BRANDRT_API_TOKEN$

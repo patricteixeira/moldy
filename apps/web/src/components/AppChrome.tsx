@@ -25,10 +25,15 @@ export function AppChrome({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-area={area ?? (pathname === "/" ? "installation" : "unknown")}>
       <header className="app-nav">
         <Link className="wordmark" to="/" aria-label="Molda, início">
-          Molda
+          <span className="wordmark-symbol" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>Molda</span>
         </Link>
         <nav className="app-nav-links" aria-label="Navegação principal">
           <Link to={contextHref} aria-current={pathname === "/" ? "page" : undefined}>

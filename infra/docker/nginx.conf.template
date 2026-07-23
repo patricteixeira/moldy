@@ -20,6 +20,12 @@ server {
         proxy_read_timeout 120s;
     }
 
+    location /fonts/synapsis/ {
+        add_header Cross-Origin-Resource-Policy "same-origin" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri /index.html;
     }
