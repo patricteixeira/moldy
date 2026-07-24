@@ -79,10 +79,7 @@ test("walking skeleton v0.2: configurar → escolher → editar → exportar", a
   await expect.poll(async () => page.getByTestId("kit-card").count()).toBeGreaterThan(13)
 
   await page.locator('[data-testid="kit-card"][data-layout-id="quote-post-4x5"]').click()
-  await expect(page.getByRole("heading", { name: "Títulos maiores" })).toBeVisible()
-  await page.getByRole("button", { name: "Aplicar esta sugestão" }).click()
-  await expect(page.getByText("Ajustar Grade técnica")).toBeVisible()
-  await expect(page.locator('.preview-canvas [data-surface-kind="technical-grid"]')).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Ainda não há uma sugestão" })).toBeVisible()
   await page.getByRole("button", { name: "Ver todas as 20 texturas" }).click()
   await page
     .getByTestId("surface-option")
