@@ -55,6 +55,7 @@ it("preserva ajustes visuais por camada", () => {
   const overrides = {
     title: {
       area: [72, 96, 620, 210] as [number, number, number, number],
+      rotationDeg: 27,
       fontSizePx: 86,
       fontWeight: 700,
       opacity: 0.82,

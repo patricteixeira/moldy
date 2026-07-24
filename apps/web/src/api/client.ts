@@ -78,10 +78,15 @@ export function createApiClient(fetchFn: typeof fetch = fetch): ApiClient {
   }
 
   return {
-    async importBrandPackage(files) {
-      const archive = await buildPackageZip(files)
+    async importBrandPackage(files, onProgress) {
+      onProgress?.({ phase: "packaging", percent: 0 })
+      const archive = await buildPackageZip(files, (percent) =>
+        onProgress?.({ phase: "packaging", percent }),
+      )
+      onProgress?.({ phase: "packaging", percent: 100 })
       const form = new FormData()
       form.set("package", new File([archive], "pacote.zip", { type: "application/zip" }))
+      onProgress?.({ phase: "processing" })
       return json<ImportResult>("/v1/brands/imports", { method: "POST", body: form })
     },
     resolveDraftFont(draftId, questionId, family) {

@@ -24,20 +24,22 @@ DeclaredLayoutStyleKind = Literal["ornamental-divider", "restrained-clinical-gri
 
 _MODE_LIGHT = re.compile(
     r"(?:\bfundos?\s+claros?\b.{0,40}\bpositivo\b|"
-    r"\bsobre\s+(?:fundo\s+)?claro\b.{0,40}\buso\s+padrao\b)",
+    r"\bsobre\s+(?:fundo\s+)?claro\b.{0,40}\buso\s+padrao\b|"
+    r"\bmodo\s+claro\b.{0,180}\bpapel\b.{0,80}\bfundo\b)",
     re.DOTALL,
 )
 _MODE_DARK = re.compile(
     r"(?:\bfundos?\s+escuros?\b.{0,40}\bnegativo\b|"
     r"\b(?:creme|branco|claro|negativo)\s+sobre\s+[^\n]{1,60}?"
-    r"\bfundos?\s+escuros?\b)",
+    r"\bfundos?\s+escuros?\b|"
+    r"\bmodo\s+escuro\b.{0,180}\b(?:carvao|grafite)\b.{0,80}\bfundo\b)",
     re.DOTALL,
 )
 _ACCENT_LIMIT = re.compile(
     r"\bambar\b.{0,600}?(?:abaixo\s+de|menor\s+que|<)\s*10\s*%",
     re.DOTALL,
 )
-_DIAGONAL = re.compile(r"\bpadrao\s+diagonal\b")
+_DIAGONAL = re.compile(r"(?:\bpadrao\s+diagonal\b|\bdiagonais?\s*135)")
 _ZERO_PADDED = re.compile(r"\bzero\s+a\s+esquerda\b")
 _ORNAMENTAL_DIVIDER = re.compile(
     r"\blotus\s+as\s+a\s+divider\s+ornament\b.{0,700}?"
@@ -56,6 +58,20 @@ _RATIO_PATTERNS: dict[DeclaredColorRole, re.Pattern[str]] = {
     "primary": re.compile(r"\bgrafite\b[^\n]{0,80}\n\s*(?P<value>\d{1,3})\s*%"),
     "background": re.compile(r"\bpapel\b[^\n]{0,80}\n\s*(?P<value>\d{1,3})\s*%"),
     "accent": re.compile(r"\bambar\b[^\n]{0,80}\n\s*(?P<value>\d{1,3})\s*%"),
+}
+_COMBINED_RATIO = re.compile(
+    r"\barea\s+"
+    r"(?P<first>\d{1,3})\s*/\s*(?P<second>\d{1,3})\s*/\s*(?P<third>\d{1,3})"
+    r"\s*\(\s*"
+    r"(?P<first_role>papel|[ae]mbar|grafite)\s*/\s*"
+    r"(?P<second_role>papel|[ae]mbar|grafite)\s*/\s*"
+    r"(?P<third_role>papel|[ae]mbar|grafite)\s*\)",
+)
+_COMBINED_ROLE: dict[str, DeclaredColorRole] = {
+    "papel": "background",
+    "ambar": "accent",
+    "embar": "accent",
+    "grafite": "primary",
 }
 _COLOR_VALUE_PATTERNS: dict[DeclaredColorRole, re.Pattern[str]] = {
     "primary": re.compile(r"\bgrafite\b.{0,240}?\bhex\s*(?P<value>#[0-9a-f]{6})", re.DOTALL),
@@ -241,6 +257,17 @@ def extract_pdf_composition(pdf_path: Path) -> CompositionDeclarations:
 
         page_ratios: dict[DeclaredColorRole, float] = {}
         page_colors: dict[DeclaredColorRole, str] = {}
+        combined = _COMBINED_RATIO.search(text)
+        if combined is not None:
+            for value_group, role_group in (
+                ("first", "first_role"),
+                ("second", "second_role"),
+                ("third", "third_role"),
+            ):
+                percentage = int(combined[value_group])
+                role = _COMBINED_ROLE[combined[role_group]]
+                if 0 < percentage <= 100:
+                    page_ratios[role] = percentage / 100
         for role, pattern in _RATIO_PATTERNS.items():
             match = pattern.search(text)
             if match is None:

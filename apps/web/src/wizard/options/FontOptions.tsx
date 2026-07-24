@@ -383,6 +383,7 @@ export function FontOptions({ draftId, questionId, candidates, selected, onSelec
         <div className="external-font-consent">
           <label>
             <input
+              name={`fontshare-consent-${questionId}`}
               type="checkbox"
               checked={fontshareEnabled}
               aria-describedby={consentDescriptionId}

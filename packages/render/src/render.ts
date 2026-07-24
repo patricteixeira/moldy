@@ -42,6 +42,8 @@ function applyBoxStyle(box: HTMLElement, slot: Slot, override?: LayerOverride): 
     override?.area ?? slot.area,
     String(override?.zIndex ?? slot.zIndex ?? Z_INDEX[slot.kind]),
   );
+  box.style.transform = override?.rotationDeg ? `rotate(${override.rotationDeg}deg)` : "";
+  box.style.transformOrigin = "center";
   box.style.opacity = String(override?.opacity ?? slot.opacity ?? 1);
   if (override?.hidden) box.style.display = "none";
 }
@@ -144,6 +146,8 @@ function appendLockedLayer(
     override?.area ?? layer.area,
     String(override?.zIndex ?? layer.zIndex ?? 0),
   );
+  element.style.transform = override?.rotationDeg ? `rotate(${override.rotationDeg}deg)` : "";
+  element.style.transformOrigin = "center";
   element.style.opacity = String(override?.opacity ?? layer.opacity ?? 1);
   if (override?.hidden) element.style.display = "none";
 
@@ -345,10 +349,14 @@ export function renderDocument(
       const effectiveArea = override?.area ?? slot.area;
       const size =
         override?.fontSizePx ??
-        slot.fontSizePx ??
         (slot.fit === "shrink-within-role-range"
-          ? chooseFontSize(measureAt, effectiveArea[3], textStyle.minSizePx, textStyle.maxSizePx)
-          : textStyle.maxSizePx);
+          ? chooseFontSize(
+              measureAt,
+              effectiveArea[3],
+              textStyle.minSizePx,
+              slot.fontSizePx ?? textStyle.maxSizePx,
+            )
+          : (slot.fontSizePx ?? textStyle.maxSizePx));
       contentElement.style.fontSize = `${size}px`;
       const contentPx = measureText(contentElement, size);
       if (contentPx > effectiveArea[3]) {

@@ -12,6 +12,7 @@ import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import BinaryIO
 
 ALLOWED_EXTENSIONS = {".pdf", ".svg", ".png", ".jpg", ".jpeg", ".ttf", ".otf", ".json"}
 _CHUNK_SIZE = 64 * 1024
@@ -85,7 +86,7 @@ def _validated_entries(
 
 
 def safe_unpack(
-    zip_bytes: bytes,
+    zip_source: bytes | BinaryIO,
     dest: Path,
     *,
     max_entries: int = 200,
@@ -103,7 +104,9 @@ def safe_unpack(
     completed = False
     try:
         try:
-            with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
+            source = io.BytesIO(zip_source) if isinstance(zip_source, bytes) else zip_source
+            source.seek(0)
+            with zipfile.ZipFile(source) as archive:
                 entries = _validated_entries(archive, max_entries)
                 for info, name, is_directory in entries:
                     if is_directory:

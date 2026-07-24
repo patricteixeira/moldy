@@ -22,8 +22,8 @@ const pass: GuardCheck = {
 it("mostra orientações sem apresentá-las como proibição", async () => {
   const onAction = vi.fn()
   render(<GuardPanel checks={[pass, guidance]} onAction={onAction} />)
-  expect(screen.getByRole("heading", { name: "Orientações da marca" })).toBeInTheDocument()
-  expect(screen.getByText(/exportar assim mesmo/i)).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Itens para revisar" })).toBeInTheDocument()
+  expect(screen.getByText(/baixe o arquivo sem alterações/i)).toBeInTheDocument()
   const items = screen.getAllByTestId("guard-item")
   expect(items).toHaveLength(1)
   expect(items[0]).toHaveAttribute("data-check-id", "text-length")

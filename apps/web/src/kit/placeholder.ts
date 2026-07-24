@@ -104,7 +104,7 @@ function seedElements(
         colorToken: accentToken,
       }),
     )
-    values[id] = { kind: "text", text: `${brandName} — identidade em uso` }
+    values[id] = { kind: "text", text: `${brandName} · nova peça` }
   }
 
   const signatureId = "user-signature-1"
@@ -148,7 +148,7 @@ function seedElements(
       kind: "text",
       text: excerpt(
         brand?.identity?.personality,
-        "Uma segunda camada de leitura amplia a mensagem principal.",
+        "Escreva aqui a informação principal.",
         150,
       ),
     }
@@ -171,9 +171,9 @@ function seedElements(
 }
 
 function roleFallback(role: string | null | undefined, brandName: string): string {
-  if (role === "heading" || role === "display") return `${brandName} em movimento.`
+  if (role === "heading" || role === "display") return `${brandName}: título da peça.`
   if (role === "caption" || role === "label") return brandName
-  return "Edite este texto para construir a mensagem da peça."
+  return "Escreva aqui a informação principal."
 }
 
 export function placeholderContent(
@@ -189,15 +189,15 @@ export function placeholderContent(
     layout.compositionMode != null ||
     (layout.lockedLayers?.length ?? 0) > 0 ||
     layout.slots.some((slot) => slot.emphasisColorToken != null)
-  const essence = excerpt(ir?.identity?.essence, `${brandName} em movimento.`, 92)
+  const essence = excerpt(ir?.identity?.essence, `Novidade da ${brandName}.`, 92)
   const personality = excerpt(
     ir?.identity?.personality,
-    "Forma, ritmo e mensagem trabalhando como uma só ideia.",
+    "Apresente a informação principal e os detalhes.",
     180,
   )
   const voice = excerpt(
     ir?.identity?.voice,
-    "Uma voz reconhecível transforma presença em memória.",
+    "Escreva uma chamada curta e direta.",
     126,
   )
 
@@ -209,20 +209,20 @@ export function placeholderContent(
     }
 
     const bySlot: Record<string, string> = {
-      kicker: `${brandName} — guia visual`,
+      kicker: `${brandName} · nova peça`,
       headline: closure ? brandName.toLocaleUpperCase("pt-BR") : essence,
       title: essence,
       quote: voice,
       author: brandName,
       body: personality,
       caption: "DETALHE DA COLEÇÃO",
-      tagline: "Uma postura diante da inteireza do que se cria.",
+      tagline: "Saiba mais e continue.",
       index: "06",
       signature: handleFor(brandName),
       issue: "EDIÇÃO 01 · 2026",
       "signal-word": "AGORA",
       coordinates: "X 041 · Y 028 · REV 03",
-      note: "NOTA 04 — RELAÇÕES, MARGENS E HIERARQUIA VISÍVEIS.",
+      note: "NOTA 04 · INFORMAÇÃO COMPLEMENTAR.",
       "note-one": "01 · MATÉRIA",
       "note-two": "02 · FUNÇÃO",
       "note-three": "03 · DETALHE",
@@ -254,8 +254,8 @@ export function placeholderContent(
       url: "produto.exemplo/interface",
     }
     const editorialBySlot: Record<string, string> = {
-      kicker: "AUTORIA NÃO É UM EFEITO.",
-      headline: "É A COERÊNCIA ENTRE INTENÇÃO E FORMA.",
+      kicker: "NOVA PEÇA",
+      headline: "ESCREVA A MENSAGEM PRINCIPAL.",
       index: "06",
       signature: handleFor(brandName),
     }
@@ -266,12 +266,10 @@ export function placeholderContent(
     const text = slot.maxChars == null ? sample : excerpt(sample, sample, slot.maxChars)
     const emphasis =
       isEditorial && slot.id === "headline" && slot.emphasisColorToken
-        ? text.includes("INTENÇÃO E FORMA")
-          ? "INTENÇÃO E FORMA"
+        ? text.includes("MENSAGEM PRINCIPAL")
+          ? "MENSAGEM PRINCIPAL"
           : undefined
-        : closure && slot.id === "tagline" && text.includes("inteireza")
-          ? "inteireza"
-          : undefined
+        : undefined
     values[slot.id] = { kind: "text", text, ...(emphasis ? { emphasis } : {}) }
   }
 

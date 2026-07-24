@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import zipfile
+from pathlib import Path
 
 from brand_api.fonts.models import FontRequest, FontResolutionUnavailable, ResolvedFont
 from brand_api.models import Draft
@@ -452,14 +453,14 @@ def test_retry_manual_publica_so_novos_blobs_e_remove_diagnostico(
     )
     client.app.state.font_resolver = _ManualResolver(fixture_font_bytes)
     storage = client.app.state.storage
-    original_put = storage.put
+    original_put_file = storage.put_file
     stored_sizes: list[int] = []
 
-    def recording_put(data: bytes) -> str:
-        stored_sizes.append(len(data))
-        return original_put(data)
+    def recording_put_file(source: Path) -> str:
+        stored_sizes.append(source.stat().st_size)
+        return original_put_file(source)
 
-    monkeypatch.setattr(storage, "put", recording_put)
+    monkeypatch.setattr(storage, "put_file", recording_put_file)
     draft_id = body["draftId"]
     resolved = client.post(
         f"/v1/drafts/{draft_id}/fonts/resolve",

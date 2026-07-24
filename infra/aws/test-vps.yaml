@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Temporary Brand Runtime development VPS for full-stack testing
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Compute
+        Parameters:
+          - AmiId
+          - InstanceType
+          - RootVolumeSize
+      - Label:
+          default: Network
+        Parameters:
+          - VpcId
+          - SubnetId
+          - AllowedWebCidr
+
+Parameters:
+  AmiId:
+    Type: AWS::EC2::Image::Id
+    Default: ami-0dbe67d4f27bb72bc
+    Description: Amazon Linux 2023 x86_64 AMI in sa-east-1
+
+  InstanceType:
+    Type: String
+    Default: m6a.xlarge
+    AllowedValues:
+      - m6a.xlarge
+    Description: Fixed-performance 4 vCPU and 16 GiB development instance
+
+  RootVolumeSize:
+    Type: Number
+    Default: 80
+    MinValue: 40
+    MaxValue: 200
+    Description: Encrypted gp3 root volume size in GiB
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-06a63f740c64e1ad4
+    Description: Existing VPC for the test instance
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-0ccd68560b379e471
+    Description: Public subnet in sa-east-1a
+
+  AllowedWebCidr:
+    Type: String
+    Default: 152.244.203.236/32
+    AllowedPattern: "^[0-9./]+$"
+    ConstraintDescription: Use an IPv4 CIDR such as 203.0.113.10/32
+    Description: Source allowed to reach the Brand Runtime web port
+
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: SSM and private deployment artifact access for the Brand Runtime test VPS
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: ReadDeploymentArtifacts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "${DeploymentBucket.Arn}/*"
+      Tags:
+        - Key: Environment
+          Value: testing
+        - Key: Project
+          Value: Sistema-RunTime-DesignSystem
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+
+  DeploymentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireTemporaryDeploymentArtifacts
+            Status: Enabled
+            ExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: testing
+        - Key: Project
+          Value: Sistema-RunTime-DesignSystem
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Brand Runtime test web access restricted to one IPv4 CIDR
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - Description: Brand Runtime web from the current developer IPv4 address
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref AllowedWebCidr
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-web"
+        - Key: Environment
+          Value: testing
+        - Key: Project
+          Value: Sistema-RunTime-DesignSystem
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  TestInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref AmiId
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref InstanceProfile
+      Monitoring: false
+      DisableApiTermination: false
+      InstanceInitiatedShutdownBehavior: stop
+      MetadataOptions:
+        HttpEndpoint: enabled
+        HttpTokens: required
+        HttpPutResponseHopLimit: 1
+        InstanceMetadataTags: disabled
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          DeviceIndex: "0"
+          GroupSet:
+            - !Ref InstanceSecurityGroup
+          SubnetId: !Ref SubnetId
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: !Ref RootVolumeSize
+            VolumeType: gp3
+            Iops: 3000
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > >(tee /var/log/brand-runtime-bootstrap.log | logger -t brand-runtime-bootstrap -s 2>/dev/console) 2>&1
+
+          hostnamectl set-hostname brand-runtime-test
+          dnf update -y
+          dnf install -y docker git jq
+          install -d -m 0755 /usr/local/lib/docker/cli-plugins
+          curl -fsSL \
+            https://github.com/docker/compose/releases/download/v5.3.1/docker-compose-linux-x86_64 \
+            -o /usr/local/lib/docker/cli-plugins/docker-compose
+          echo "f9ebc6ebdb19d769b793c245a736caaeb198c62587f13b25c660c13b4987f959  /usr/local/lib/docker/cli-plugins/docker-compose" \
+            | sha256sum -c -
+          chmod 0755 /usr/local/lib/docker/cli-plugins/docker-compose
+          curl -fsSL \
+            https://github.com/docker/buildx/releases/download/v0.35.0/buildx-v0.35.0.linux-amd64 \
+            -o /usr/local/lib/docker/cli-plugins/docker-buildx
+          echo "d41ece72044243b4f58b343441ae37446d9c29a7d6b5e11c61847bbcf8f7dfda  /usr/local/lib/docker/cli-plugins/docker-buildx" \
+            | sha256sum -c -
+          chmod 0755 /usr/local/lib/docker/cli-plugins/docker-buildx
+          systemctl enable --now docker
+          systemctl enable --now amazon-ssm-agent
+          usermod -aG docker ec2-user
+          docker compose version
+          docker buildx version
+
+          if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
+            fallocate -l 8G /swapfile
+            chmod 600 /swapfile
+            mkswap /swapfile
+            echo "/swapfile none swap sw 0 0" >> /etc/fstab
+            swapon /swapfile
+          fi
+
+          mkdir -p /opt/brand-runtime
+          chown ec2-user:ec2-user /opt/brand-runtime
+          dnf clean all
+          touch /var/lib/brand-runtime-vps-ready
+      Tags:
+        - Key: Name
+          Value: brand-runtime-test-vps
+        - Key: Environment
+          Value: testing
+        - Key: WorkloadType
+          Value: development
+        - Key: Project
+          Value: Sistema-RunTime-DesignSystem
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: CostProfile
+          Value: stop-when-idle
+
+Outputs:
+  InstanceId:
+    Description: EC2 instance identifier
+    Value: !Ref TestInstance
+
+  PublicIp:
+    Description: Ephemeral public IPv4 address while the instance is running
+    Value: !GetAtt TestInstance.PublicIp
+
+  PublicDnsName:
+    Description: Ephemeral public DNS name while the instance is running
+    Value: !GetAtt TestInstance.PublicDnsName
+
+  WebUrl:
+    Description: Brand Runtime URL after the application stack is deployed
+    Value: !Sub "http://${TestInstance.PublicIp}:8080"
+
+  SecurityGroupId:
+    Description: Security group restricted to the configured developer CIDR
+    Value: !Ref InstanceSecurityGroup
+
+  InstanceRoleArn:
+    Description: IAM role used for Systems Manager and private deployment artifact access
+    Value: !GetAtt InstanceRole.Arn
+
+  DeploymentBucketName:
+    Description: Private temporary bucket used to transfer the current worktree
+    Value: !Ref DeploymentBucket

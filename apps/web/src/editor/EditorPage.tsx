@@ -64,6 +64,33 @@ function initialSelection(layout: LayoutSpec): string | null {
   )
 }
 
+function applyInitialHeadline(
+  layout: LayoutSpec,
+  content: ContentSpec,
+  headline: string,
+): ContentSpec {
+  if (!headline) return content
+  const slot =
+    layout.slots.find(
+      (candidate) =>
+        candidate.kind === "text" &&
+        ["headline", "title", "quote"].includes(candidate.id),
+    ) ??
+    layout.slots.find(
+      (candidate) =>
+        candidate.kind === "text" &&
+        (candidate.role === "heading" || candidate.role === "display"),
+    )
+  if (!slot) return content
+  return {
+    ...content,
+    values: {
+      ...content.values,
+      [slot.id]: { kind: "text", text: headline },
+    },
+  }
+}
+
 function compactOverride(override: LayerOverride): LayerOverride | null {
   const entries = Object.entries(override).filter(([, value]) => value !== undefined)
   return entries.length > 0 ? (Object.fromEntries(entries) as LayerOverride) : null
@@ -82,6 +109,10 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
   const [searchParams] = useSearchParams()
   const carouselId = searchParams.get("carouselId")
   const carouselSlideId = searchParams.get("slideId")
+  const initialHeadline =
+    carouselId || carouselSlideId
+      ? ""
+      : (searchParams.get("headline")?.trim().slice(0, 180) ?? "")
   const carouselDraftScope =
     carouselId && carouselSlideId ? `${carouselId}:${carouselSlideId}` : null
   const draftContextKey =
@@ -195,8 +226,11 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
         })
         if (activeLayout) {
           const stored = loadEditorDraft(revisionId, activeLayout, carouselDraftScope)
-          const sample =
+          const baseSample =
             carouselSlide?.content ?? placeholderContent(activeLayout, revisionId, brandIr)
+          const sample = carouselSlide
+            ? baseSample
+            : applyInitialHeadline(activeLayout, baseSample, initialHeadline)
           const hasStoredDraft =
             Object.keys(stored.values).length > 0 ||
             Object.keys(stored.overrides).length > 0 ||
@@ -239,7 +273,16 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
     return () => {
       active = false
     }
-  }, [api, carouselDraftScope, carouselId, carouselSlideId, draftContextKey, layoutId, revisionId])
+  }, [
+    api,
+    carouselDraftScope,
+    carouselId,
+    carouselSlideId,
+    draftContextKey,
+    initialHeadline,
+    layoutId,
+    revisionId,
+  ])
 
   const layout = useMemo(
     () => data?.layouts.find((candidate) => candidate.id === layoutId) ?? null,
@@ -612,6 +655,9 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
   const selectedArea = selectedElement
     ? elementArea(selectedElement, overrides[selectedElement.id])
     : null
+  const selectedRotation = selectedElement
+    ? (overrides[selectedElement.id]?.rotationDeg ?? 0)
+    : 0
   const sampleOverrides =
     data.carousel?.content.overrides ??
     placeholderContent(layout, revisionId, data.brandIr).overrides ??
@@ -642,7 +688,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
             }
           >
             <span aria-hidden="true">←</span>
-            {data.carousel ? "Carrossel" : "Kit"}
+            {data.carousel ? "Carrossel" : "Modelos"}
           </Link>
           <span className="editor-toolbar-rule" aria-hidden="true" />
           {data.carousel ? (
@@ -702,6 +748,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
           <label className="zoom-control">
             <span>Zoom</span>
             <input
+              name="editor-zoom"
               type="range"
               min="25"
               max="100"
@@ -711,7 +758,7 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
             />
             <output>{zoom}%</output>
           </label>
-          <a className="editor-export-jump" href="#export-panel">Exportar</a>
+          <a className="editor-export-jump" href="#export-panel">Baixar</a>
           {carouselSaveError ? (
             <span className="editor-carousel-save-error" role="alert">
               {carouselSaveError}
@@ -724,9 +771,15 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
         <section className="editor-preview" aria-label="Área da peça">
           <div className="canvas-ruler canvas-ruler-horizontal" aria-hidden="true" />
           <div className="canvas-ruler canvas-ruler-vertical" aria-hidden="true" />
-          <p className="canvas-instruction">
-            Arraste para alinhar. Segure Alt para mover livremente.
-          </p>
+          <div className="editor-quick-guide" aria-label="Como editar">
+            <span><strong>1. Selecione</strong> um item na peça.</span>
+            <span><strong>2. Edite</strong> no painel ao lado.</span>
+            <span><strong>3. Baixe</strong> o arquivo no fim da página.</span>
+            <details>
+              <summary>Atalhos de precisão</summary>
+              <p>Arraste para mover. Use as alças para redimensionar e o ponto circular para girar. Alt move livremente e Shift encaixa a rotação.</p>
+            </details>
+          </div>
           <Preview
             brandIr={data.brandIr}
             layoutSpec={activeLayout}
@@ -735,8 +788,10 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
             maxWidthPx={Math.round(layout.canvas.widthPx * (zoom / 100))}
             selectedLayerId={selectedLayerId}
             selectedArea={selectedArea}
+            selectedRotation={selectedRotation}
             onSelectLayer={setSelectedLayerId}
             onAreaChange={(id, area) => patchOverride(id, { area })}
+            onRotationChange={(id, rotationDeg) => patchOverride(id, { rotationDeg })}
           />
         </section>
 
@@ -784,8 +839,8 @@ export function EditorPage({ pollIntervalMs = 1000 }: EditorPageProps): JSX.Elem
       <section id="export-panel" className="editor-guard-export" data-testid="editor-guard-export">
         <div className="export-panel-heading">
           <p className="panel-kicker">Arquivo final</p>
-          <h2>Conferir e baixar</h2>
-          <p>Tudo o que você ajustou aparece no arquivo baixado.</p>
+          <h2>Baixar arquivo</h2>
+          <p>Escolha o formato e faça o download.</p>
         </div>
         <ExportControls
           disabled={uploading}

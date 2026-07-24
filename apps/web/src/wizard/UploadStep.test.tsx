@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { expect, it, vi } from "vitest"
 import { ApiProvider } from "../api/context"
-import type { ImportResult } from "../api/types"
+import type { BrandImportProgress, ImportResult } from "../api/types"
 import { fakeClient } from "../test/fakeApi"
 import { UploadStep } from "./UploadStep"
 
@@ -34,7 +34,7 @@ it("envia o pacote e entrega o draft", async () => {
   const file = new File(["x"], "manual.pdf", { type: "application/pdf" })
   await user.upload(screen.getByTestId("wizard-file-input"), file)
   await user.click(screen.getByTestId("wizard-enviar"))
-  expect(importBrandPackage).toHaveBeenCalledWith([file])
+  expect(importBrandPackage).toHaveBeenCalledWith([file], expect.any(Function))
   await waitFor(() => expect(onDraft).toHaveBeenCalledWith(readyResult))
 })
 
@@ -61,7 +61,7 @@ it("acumula seleções sucessivas sem duplicar o mesmo arquivo", async () => {
     "Este arquivo já estava na seleção",
   )
   await user.click(screen.getByTestId("wizard-enviar"))
-  expect(importBrandPackage).toHaveBeenCalledWith([manual, logo])
+  expect(importBrandPackage).toHaveBeenCalledWith([manual, logo], expect.any(Function))
 })
 
 it("permite remover um material antes do envio", async () => {
@@ -128,6 +128,45 @@ it("congela a seleção de arquivos enquanto importa o pacote", async () => {
   expect(input).toBeEnabled()
 })
 
+it("mostra as fases reais de preparação e processamento", async () => {
+  let reportProgress: ((progress: BrandImportProgress) => void) | undefined
+  let finish!: (result: ImportResult) => void
+  const importBrandPackage = vi.fn(
+    (
+      _files: File[],
+      onProgress?: (
+        progress: { phase: "packaging" | "processing"; percent?: number },
+      ) => void,
+    ) => {
+      reportProgress = onProgress
+      onProgress?.({ phase: "packaging", percent: 42 })
+      return new Promise<ImportResult>((resolve) => {
+        finish = resolve
+      })
+    },
+  )
+  render(
+    <ApiProvider client={fakeClient({ importBrandPackage })}>
+      <UploadStep onDraft={vi.fn()} />
+    </ApiProvider>,
+  )
+
+  await userEvent.upload(
+    screen.getByTestId("wizard-file-input"),
+    new File(["x"], "manual.pdf"),
+  )
+  await userEvent.click(screen.getByTestId("wizard-enviar"))
+
+  expect(screen.getByText("Preparando pacote · 42%")).toBeInTheDocument()
+  expect(screen.getByRole("progressbar")).toHaveAttribute("value", "42")
+
+  act(() => reportProgress?.({ phase: "processing" }))
+  expect(screen.getByText("Enviando e analisando materiais")).toBeInTheDocument()
+  expect(screen.getByRole("progressbar")).not.toHaveAttribute("value")
+
+  await act(async () => finish(readyResult))
+})
+
 it("não avança com pergunta obrigatória vazia e mostra os diagnósticos", async () => {
   const user = userEvent.setup()
   const incomplete: ImportResult = {
@@ -170,6 +209,40 @@ it("não avança com pergunta obrigatória vazia e mostra os diagnósticos", asy
   expect(screen.getByText("manual.pdf")).toBeInTheDocument()
 })
 
+it("avança quando somente a fonte não foi detectada porque ela pode ser digitada", async () => {
+  const user = userEvent.setup()
+  const fontWithoutCandidate: ImportResult = {
+    draftId: "d-fonte-manual",
+    questions: [
+      {
+        id: "font.heading",
+        kind: "pick-font",
+        promptPt: "Qual é a fonte dos títulos?",
+        candidates: [],
+        required: true,
+      },
+    ],
+    diagnostics: [],
+    ignoredEntries: [],
+  }
+  const onDraft = vi.fn()
+  render(
+    <ApiProvider
+      client={fakeClient({
+        importBrandPackage: vi.fn(async () => fontWithoutCandidate),
+      })}
+    >
+      <UploadStep onDraft={onDraft} />
+    </ApiProvider>,
+  )
+
+  await user.upload(screen.getByTestId("wizard-file-input"), new File(["pdf"], "manual.pdf"))
+  await user.click(screen.getByTestId("wizard-enviar"))
+
+  await waitFor(() => expect(onDraft).toHaveBeenCalledWith(fontWithoutCandidate))
+  expect(screen.queryByText("Ainda faltam alguns arquivos.")).not.toBeInTheDocument()
+})
+
 it("permite acrescentar materiais e reenviar depois de um pacote incompleto", async () => {
   const user = userEvent.setup()
   const incomplete: ImportResult = {
@@ -200,5 +273,5 @@ it("permite acrescentar materiais e reenviar depois de um pacote incompleto", as
   await user.click(screen.getByTestId("wizard-enviar"))
 
   await waitFor(() => expect(onDraft).toHaveBeenCalledWith(readyResult))
-  expect(importBrandPackage).toHaveBeenLastCalledWith([manual, logo])
+  expect(importBrandPackage).toHaveBeenLastCalledWith([manual, logo], expect.any(Function))
 })

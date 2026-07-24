@@ -1,18 +1,18 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { expect, it, vi } from "vitest"
 import { ApiError } from "../api/client"
 import { ApiProvider } from "../api/context"
-import type { ApiClient } from "../api/types"
+import type { ApiClient, ContentSpec, LayoutSpec } from "../api/types"
 import { fakeClient, fakeQuoteLayout, fakeStatementLayout } from "../test/fakeApi"
 import { mounts } from "../test/renderStub"
 import { KitPage } from "./KitPage"
 
-function renderKit(client: ApiClient) {
+function renderKit(client: ApiClient, entry = "/marcas/brandrev_x/kit") {
   render(
     <ApiProvider client={client}>
-      <MemoryRouter initialEntries={["/marcas/brandrev_x/kit"]}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/marcas/:revisionId/kit" element={<KitPage />} />
           <Route path="/marcas/:revisionId/editor/:layoutId" element={<h1>Editor</h1>} />
@@ -20,6 +20,49 @@ function renderKit(client: ApiClient) {
       </MemoryRouter>
     </ApiProvider>,
   )
+}
+
+function categorizedLayouts(): LayoutSpec[] {
+  return [
+    "fashion-cover",
+    "product-hero",
+    "brutalist-manifesto",
+    "fashion-spread",
+    "product-benefit",
+    "evidence-comparison",
+    "product-launch",
+    "geometric-signal",
+    "kinetic-pulse",
+  ].map((id, index) => {
+    const layout = fakeStatementLayout()
+    layout.id = `${id}-post-4x5`
+    layout.namePt = id
+    layout.recommendationRank = index + 1
+    layout.recommendationBasis = "brand"
+    if (/spread|benefit|comparison/.test(id)) {
+      layout.slots.push({
+        id: "body",
+        kind: "text",
+        required: true,
+        area: [48, 760, 984, 160],
+        fit: "shrink-within-role-range",
+        role: "body",
+        maxChars: 320,
+      })
+    }
+    if (/launch|signal|pulse/.test(id)) {
+      layout.slots.push({
+        id: "cta",
+        kind: "text",
+        required: false,
+        area: [48, 900, 360, 72],
+        fit: "shrink-within-role-range",
+        role: "caption",
+        maxChars: 40,
+      })
+    }
+    return layout
+  })
 }
 
 it("lista os layouts com nome PT e thumbnail renderizado pela biblioteca real", async () => {
@@ -40,16 +83,16 @@ it("mantém os fluxos de carrossel e Word antes da biblioteca de peças", async 
   renderKit(fakeClient({ getKit: vi.fn(async () => [fakeStatementLayout()]) }))
 
   const workflowHeading = await screen.findByRole("heading", {
-    name: "Quando uma peça precisa virar sequência.",
+    name: "Precisa de mais de uma tela?",
   })
   const libraryHeading = screen.getByRole("heading", {
-    name: "Comece pelas composições que conversam com esta marca.",
+    name: "Escolha pela função da peça.",
   })
 
   expect(
     workflowHeading.compareDocumentPosition(libraryHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy()
-  expect(screen.getByRole("link", { name: /Modo Carrossel/i })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: /Carrossel/i })).toHaveAttribute(
     "href",
     "/marcas/brandrev_x/carrossel",
   )
@@ -59,7 +102,7 @@ it("mantém os fluxos de carrossel e Word antes da biblioteca de peças", async 
   )
 })
 
-it("coloca famílias versionadas primeiro e identifica sua versão", async () => {
+it("coloca famílias editáveis primeiro e usa nomes compreensíveis", async () => {
   const legacy = fakeStatementLayout()
   const editorial = fakeQuoteLayout()
   editorial.id = "typographic-ledger-post-4x5"
@@ -202,19 +245,19 @@ it("coloca famílias versionadas primeiro e identifica sua versão", async () =>
   await userEvent.click(await screen.findByRole("button", { name: /Todos os modelos/ }))
   const cards = await screen.findAllByTestId("kit-card")
   expect(cards[0]).toHaveAttribute("data-layout-id", editorial.id)
-  expect(screen.getByText("Tipográfico editorial · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Brutalismo tipográfico · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Sistema suíço · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Modernismo geométrico · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Tipografia cinética · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Construtivismo · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Editorial de moda · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Minimalismo de luxo · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Colagem editorial · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Diagrama técnico · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Produto e campanha · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Dados e evidências · v1.0.0")).toBeInTheDocument()
-  expect(screen.getByText("Mockup de dispositivo · v1.0.0")).toBeInTheDocument()
+  expect(screen.getAllByText("Texto em destaque").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Tipografia de impacto").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Grade precisa").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Formas geométricas").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Ritmo tipográfico").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Blocos em tensão").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Imagem editorial").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Espaço e precisão").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Camadas e recortes").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Informação diagramada").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Produto em foco").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Dados em destaque").length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Tela em contexto").length).toBeGreaterThan(0)
 })
 
 it("prioriza sugestões explicadas e mantém o catálogo inteiro disponível", async () => {
@@ -227,18 +270,93 @@ it("prioriza sugestões explicadas e mantém o catálogo inteiro disponível", a
   renderKit(fakeClient({ getKit: vi.fn(async () => [other, recommended]) }))
 
   const cards = await screen.findAllByTestId("kit-card")
-  expect(cards).toHaveLength(1)
-  expect(cards[0]).toHaveAttribute("data-layout-id", recommended.id)
+  expect(cards).toHaveLength(2)
+  expect(cards.some((card) => card.getAttribute("data-layout-id") === recommended.id)).toBe(true)
   expect(screen.getByText(/A leitura do manual aponta/)).toBeInTheDocument()
 
   await userEvent.click(screen.getByRole("button", { name: /Todos os modelos/ }))
   expect(await screen.findAllByTestId("kit-card")).toHaveLength(2)
 })
 
+it("usa o briefing para filtrar a dimensão e explicar o recorte", async () => {
+  const square = fakeStatementLayout()
+  square.profile = "post-1x1"
+  const portrait = fakeQuoteLayout()
+  portrait.id = "quote-post-4x5"
+  portrait.profile = "post-4x5"
+
+  renderKit(
+    fakeClient({ getKit: vi.fn(async () => [square, portrait]) }),
+    "/marcas/brandrev_x/kit?objective=inform&piece=individual&channel=instagram&profile=post-4x5&action=save&visual=either",
+  )
+
+  const cards = await screen.findAllByTestId("kit-card")
+  expect(cards).toHaveLength(1)
+  expect(cards[0]).toHaveAttribute("data-layout-id", portrait.id)
+  expect(screen.getByText("Instagram · Feed vertical · Explicar ou ensinar")).toBeInTheDocument()
+  expect(screen.getByRole("link", { name: "Mudar respostas" })).toHaveAttribute(
+    "href",
+    "/marcas/brandrev_x/criar",
+  )
+})
+
+it("mantém a biblioteca visível quando a dimensão do briefing ainda não existe", async () => {
+  const square = fakeStatementLayout()
+  const document = fakeQuoteLayout()
+  document.profile = "doc-a4"
+
+  renderKit(
+    fakeClient({ getKit: vi.fn(async () => [square, document]) }),
+    "/marcas/brandrev_x/kit?objective=inform&piece=individual&channel=instagram&profile=post-4x5&action=save&visual=either",
+  )
+
+  const cards = await screen.findAllByTestId("kit-card")
+  expect(cards).toHaveLength(1)
+  expect(cards[0]).toHaveAttribute("data-layout-id", square.id)
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "Exibindo outros formatos disponíveis",
+  )
+  expect(screen.getByText(/ainda não há um modelo no tamanho escolhido/i)).toBeInTheDocument()
+})
+
+it("orienta a escolha com três opções para abrir, explicar e encerrar", async () => {
+  renderKit(fakeClient({ getKit: vi.fn(async () => categorizedLayouts()) }))
+
+  const cover = await screen.findByRole("region", { name: "Abrir a mensagem" })
+  const content = screen.getByRole("region", { name: "Explicar" })
+  const closing = screen.getByRole("region", { name: "Encerrar" })
+
+  expect(within(cover).getAllByTestId("kit-card")).toHaveLength(3)
+  expect(within(content).getAllByTestId("kit-card")).toHaveLength(3)
+  expect(within(closing).getAllByTestId("kit-card")).toHaveLength(3)
+  expect(screen.getByRole("button", { name: /Sugestões para a marca/ })).toHaveTextContent("9")
+})
+
 it("clicar num layout abre o editor daquele layout", async () => {
   renderKit(fakeClient({ getKit: vi.fn(async () => [fakeStatementLayout()]) }))
   await userEvent.click(await screen.findByTestId("kit-card"))
   expect(await screen.findByRole("heading", { name: "Editor" })).toBeInTheDocument()
+})
+
+it("testa o título em todas as prévias e o leva para o editor", async () => {
+  renderKit(fakeClient({ getKit: vi.fn(async () => [fakeStatementLayout()]) }))
+
+  const input = await screen.findByLabelText("Texto de teste")
+  await userEvent.type(input, "Nova coleção disponível")
+
+  await waitFor(() => {
+    const payload = mounts.at(-1)?.payloads.at(-1) as
+      | { contentSpec: ContentSpec }
+      | undefined
+    expect(payload?.contentSpec.values.headline).toEqual({
+      kind: "text",
+      text: "Nova coleção disponível",
+    })
+  })
+  expect(screen.getByTestId("kit-card")).toHaveAttribute(
+    "href",
+    "/marcas/brandrev_x/editor/statement-post-1x1?headline=Nova%20cole%C3%A7%C3%A3o%20dispon%C3%ADvel",
+  )
 })
 
 it("expõe falha da API em PT-BR", async () => {
@@ -275,7 +393,7 @@ it("explica quando o kit não tem layouts e permite tentar novamente", async () 
   renderKit(fakeClient({ getKit: vi.fn(async () => []) }))
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Este kit ainda não tem modelos disponíveis.",
+    "Esta marca ainda não tem modelos disponíveis.",
   )
   expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeInTheDocument()
 })

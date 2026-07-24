@@ -82,11 +82,11 @@ it("faz a pessoa revisar a visão da marca antes de usá-la como direção", asy
     },
   })
 
-  expect(await screen.findByLabelText("O que a marca entrega às pessoas")).toHaveValue(extracted.essence)
+  expect(await screen.findByLabelText("O que a marca oferece")).toHaveValue(extracted.essence)
   expect(screen.getByText(/ver origem da leitura · 1 trecho/i)).toBeInTheDocument()
-  expect(screen.getByText(/confira apenas o sentido/i)).toBeInTheDocument()
-  await userEvent.clear(screen.getByLabelText("Que impressão a marca deve deixar"))
-  await userEvent.type(screen.getByLabelText("Que impressão a marca deve deixar"), "Tátil e experimental.")
+  expect(screen.getByText(/corrija somente o que estiver errado/i)).toBeInTheDocument()
+  await userEvent.clear(screen.getByLabelText("Como a marca deve parecer"))
+  await userEvent.type(screen.getByLabelText("Como a marca deve parecer"), "Tátil e experimental.")
   await userEvent.click(screen.getByTestId("wizard-confirmar"))
 
   expect(props.onConfirm).toHaveBeenCalledWith({
@@ -127,7 +127,7 @@ it("mostra a tradução local em PT-BR e permite conferir o original", async () 
     },
   })
 
-  expect(await screen.findByLabelText("O que a marca entrega às pessoas")).toHaveValue(
+  expect(await screen.findByLabelText("O que a marca oferece")).toHaveValue(
     "Uma casa tranquila.",
   )
   expect(screen.getByText(/nenhum trecho do manual foi enviado para fora/i)).toBeInTheDocument()
@@ -179,10 +179,10 @@ it("remove índice e rodapé do texto automático antes da revisão", async () =
   })
 
   const reviewEssence = (await screen.findByLabelText(
-    "O que a marca entrega às pessoas",
+    "O que a marca oferece",
   )) as HTMLTextAreaElement
   const reviewVoice = screen.getByLabelText(
-    "Como a marca conversa com as pessoas",
+    "Como a marca escreve?",
   ) as HTMLTextAreaElement
   const reviewAvoid = screen.getByLabelText(
     "O que nunca deve aparecer na marca",
@@ -213,7 +213,7 @@ it("não aceita traço como atalho para publicar uma identidade vazia", async ()
     },
   })
 
-  const essence = await screen.findByLabelText("O que a marca entrega às pessoas")
+  const essence = await screen.findByLabelText("O que a marca oferece")
   await userEvent.type(essence, "-")
 
   expect(screen.getByTestId("wizard-confirmar")).toBeDisabled()

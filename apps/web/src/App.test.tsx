@@ -13,7 +13,7 @@ it("rota inicial mostra o assistente de instalação", () => {
       </ApiProvider>
     </MemoryRouter>,
   )
-  expect(screen.getByRole("heading", { name: "Traga o que já existe." })).toBeInTheDocument()
+  expect(screen.getByRole("heading", { name: "Envie os arquivos da marca." })).toBeInTheDocument()
 })
 
 it("rota desconhecida oferece retorno ao início", () => {

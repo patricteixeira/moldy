@@ -213,21 +213,15 @@ def package_zip() -> bytes:
 
 
 def _answers(draft_body: dict) -> dict:
-    def first(question_id):
-        question = next(item for item in draft_body["questions"] if item["id"] == question_id)
-        return question["candidates"][0]["value"]
-
-    identity = first("identity.expression")
-    if not identity["essence"].strip():
-        identity = {
-            **identity,
-            "essence": "A marca existe para tornar a criação mais clara.",
-            "personality": "Humana, precisa e acessível.",
-        }
-
+    del draft_body
     return {
         "values": {
-            "identity.expression": identity,
+            "identity.expression": {
+                "essence": "A marca existe para tornar a criação mais clara.",
+                "personality": "Humana, precisa e acessível.",
+                "voice": "Direta e clara.",
+                "avoid": "Genérica e confusa.",
+            }
         }
     }
 

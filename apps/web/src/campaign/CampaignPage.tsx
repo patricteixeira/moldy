@@ -273,7 +273,7 @@ export function CampaignPage(): JSX.Element {
     }
     if (!data?.brandIr.creativeDirection) {
       setError(
-        "Esta revisão ainda não tem direção criativa confiável. Refaça a leitura da marca antes de gerar peças.",
+        "Faltam dados da marca para gerar peças. Envie o manual novamente e confira as respostas.",
       )
       return
     }
@@ -442,8 +442,8 @@ export function CampaignPage(): JSX.Element {
               <div className="campaign-direction-blocker" role="alert">
                 <strong>Esta marca ainda não está pronta para gerar campanhas.</strong>
                 <span>
-                  A leitura anterior não encontrou direção criativa suficiente. Volte ao início,
-                  envie o manual novamente e confira as pistas que o Molda extrair.
+                  Faltam dados para gerar as peças. Volte ao início, envie o manual novamente e
+                  confira as respostas.
                 </span>
                 <Link className="text-action" to="/">Refazer leitura da marca</Link>
               </div>

@@ -29,8 +29,8 @@ export function GuardPanel({ checks, onAction }: GuardPanelProps) {
       aria-labelledby="guard-heading"
       aria-live="polite"
     >
-      <h2 id="guard-heading">Orientações da marca</h2>
-      <p>Você pode ajustar estas escolhas ou exportar assim mesmo.</p>
+      <h2 id="guard-heading">Itens para revisar</h2>
+      <p>Corrija os itens abaixo ou baixe o arquivo sem alterações.</p>
       <ul>
         {visibleChecks.map((check, index) => (
           <li

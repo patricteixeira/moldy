@@ -1,0 +1,25 @@
+services:
+  api:
+    environment:
+      BRANDRT_PRIVATE_TEMPLATE_DIR: /run/molda/private/templates
+    volumes:
+      - type: bind
+        source: ${BRANDRT_PRIVATE_TEMPLATE_HOST_DIR:?Defina BRANDRT_PRIVATE_TEMPLATE_HOST_DIR}
+        target: /run/molda/private/templates
+        read_only: true
+
+  worker:
+    environment:
+      BRANDRT_PRIVATE_TEMPLATE_DIR: /run/molda/private/templates
+    volumes:
+      - type: bind
+        source: ${BRANDRT_PRIVATE_TEMPLATE_HOST_DIR:?Defina BRANDRT_PRIVATE_TEMPLATE_HOST_DIR}
+        target: /run/molda/private/templates
+        read_only: true
+
+  web:
+    volumes:
+      - type: bind
+        source: ${BRANDRT_PRIVATE_FONT_HOST_DIR:?Defina BRANDRT_PRIVATE_FONT_HOST_DIR}
+        target: /usr/share/nginx/html/fonts/synapsis
+        read_only: true

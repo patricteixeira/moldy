@@ -84,12 +84,41 @@ it("encaixa largura e altura ao redimensionar pelo canto", () => {
     area: [400, 300, 100, 100],
   }
 
-  const result = snapEditorArea([100, 100, 294, 196], "resize", [target], 6)
+  const result = snapEditorArea(
+    [100, 100, 294, 196],
+    "resize",
+    [target],
+    6,
+    { x: "end", y: "end" },
+  )
 
   expect(result.area).toEqual([100, 100, 300, 200])
   expect(result.guides).toEqual([
     expect.objectContaining({ axis: "x", movingAnchor: "end", targetAnchor: "start" }),
     expect.objectContaining({ axis: "y", movingAnchor: "end", targetAnchor: "start" }),
+  ])
+})
+
+it("encaixa o lado inicial sem deslocar o lado oposto", () => {
+  const target: AlignmentTarget = {
+    id: "photo",
+    label: "Imagem",
+    kind: "layer",
+    area: [100, 100, 100, 100],
+  }
+
+  const result = snapEditorArea(
+    [204, 204, 296, 196],
+    "resize",
+    [target],
+    6,
+    { x: "start", y: "start" },
+  )
+
+  expect(result.area).toEqual([200, 200, 300, 200])
+  expect(result.guides).toEqual([
+    expect.objectContaining({ axis: "x", movingAnchor: "start", targetAnchor: "end" }),
+    expect.objectContaining({ axis: "y", movingAnchor: "start", targetAnchor: "end" }),
   ])
 })
 

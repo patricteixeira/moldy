@@ -128,12 +128,31 @@ def _composition_ir(brand_package):
     return compile_ir(draft, answers, "Digital Artisan", created_at=FIXED)
 
 
-def test_visual_roles_are_automatic_but_identity_still_requires_review(brand_package):
+def test_visual_roles_and_extracted_identity_are_automatic(brand_package):
     draft = build_draft(brand_package)
-    with pytest.raises(CompileError) as exc:
-        compile_ir(draft, Answers(values={}), "ACME")
-    assert "identity.expression" in str(exc.value)
-    assert "color.primary" not in str(exc.value)
+    ir = compile_ir(draft, Answers(values={}), "ACME")
+
+    assert ir.identity is not None
+    assert ir.identity.essence
+    assert set(ir.colors) >= {"color.primary", "color.background", "color.text"}
+
+
+def test_package_without_identity_does_not_force_the_user_to_invent_one(brand_package):
+    draft = build_draft(brand_package)
+    identity_question = next(
+        question for question in draft.questions if question.id == "identity.expression"
+    )
+    identity_question.candidates[0].value = {
+        "essence": "",
+        "personality": "",
+        "voice": "",
+        "avoid": "",
+    }
+
+    ir = compile_ir(draft, Answers(values={}), "ACME", created_at=FIXED)
+
+    assert ir.identity is None
+    assert ir.creative_direction is None
 
 
 def test_confirmed_identity_drives_an_explainable_brand_specific_direction(brand_package):
@@ -468,14 +487,13 @@ def test_unanswered_secondary_yields_diagnostic(brand_package):
     assert any(d.code == "UNDETERMINED" and d.target == "color.secondary" for d in ir.diagnostics)
 
 
-def test_missing_error_does_not_turn_visual_inference_into_questions(brand_package):
+def test_empty_answers_use_supported_automatic_inference(brand_package):
     draft = build_draft(brand_package)
-    with pytest.raises(CompileError) as exc:
-        compile_ir(draft, Answers(values={}), "ACME")
-    message = str(exc.value)
-    assert "identity.expression" in message
-    for question_id in ("color.primary", "font.heading", "logo.primary"):
-        assert question_id not in message
+    ir = compile_ir(draft, Answers(values={}), "ACME")
+
+    assert ir.identity is not None
+    assert set(ir.fonts) == {"font.heading", "font.body"}
+    assert "logo.primary" in ir.assets
 
 
 def test_compile_uses_automatic_visual_roles_when_user_only_reviews_identity(brand_package):

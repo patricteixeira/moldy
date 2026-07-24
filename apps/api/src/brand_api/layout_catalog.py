@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from brand_api.models import BrandRevision
+from brand_api.private_templates import private_template_layouts
 from brand_api.revision_ir import revision_brand_ir
 from brand_runtime import (
     LayoutSpec,
@@ -20,8 +21,10 @@ def current_layouts(revision: BrandRevision) -> list[LayoutSpec]:
     """Resolve o catálogo atual sem modificar o snapshot imutável da revisão."""
     persisted = list(revision.kit)
     ir = revision_brand_ir(revision)
-    generated = generate_template_layouts(ir)
+    generated = [*generate_template_layouts(ir), *private_template_layouts(ir)]
     generated_by_id = {layout.id: layout for layout in generated}
+    if len(generated_by_id) != len(generated):
+        raise ValueError("O catálogo atual contém ids de layout repetidos.")
     current: list[LayoutSpec] = []
     known_ids: set[str] = set()
     for item in persisted:
@@ -65,7 +68,11 @@ def resolve_layout(revision: BrandRevision, layout_id: str) -> LayoutSpec | None
     """Resolve um layout sem alterar o snapshot imutável da revisão."""
     ir = revision_brand_ir(revision)
     template_layout = next(
-        (layout for layout in generate_template_layouts(ir) if layout.id == layout_id),
+        (
+            layout
+            for layout in (*generate_template_layouts(ir), *private_template_layouts(ir))
+            if layout.id == layout_id
+        ),
         None,
     )
     if template_layout is not None:

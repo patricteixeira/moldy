@@ -39,8 +39,9 @@ docker compose up -d --build --wait
 
 Abra `http://localhost:8080`. Para evitar uma porta já ocupada, altere
 `BRANDRT_PORT` no `.env` antes de subir a stack. A porta continua ligada somente
-a `127.0.0.1`; exposição na rede exige uma decisão operacional explícita e TLS
-na frente do serviço.
+a `127.0.0.1` por padrão. Um ambiente remoto pode definir
+`BRANDRT_BIND_HOST=0.0.0.0`, desde que o firewall restrinja a origem; exposição
+ampla na rede exige uma decisão operacional explícita e TLS na frente do serviço.
 
 Sem `BRANDRT_TOKEN`, o Compose usa `brandrt-dev`, destinado apenas a testes
 locais. O nginx injeta o convite no proxy same-origin, então o M1 não apresenta
@@ -253,6 +254,11 @@ Os demais componentes têm instruções próprias:
   AGPL e têm uso exclusivo na instância oficial online do Molda operada pelo
   Digital Artisan
   ([`aviso de uso`](apps/web/public/fonts/synapsis/PROPRIETARY-NOTICE.txt)).
+- Fontes e corpus visuais privados da instância oficial ficam fora do Git e da
+  imagem pública. O processo de implantação os injeta separadamente no ambiente
+  hospedado, sem conceder licença de redistribuição. O contrato e a montagem
+  somente leitura estão no
+  [`ADR 0020`](docs/adr/0020-catalogo-privado-da-instancia-hospedada.md).
 
 As fronteiras e alternativas estão registradas no
 [`ADR 0003`](docs/adr/0003-licencas-agpl-app-mit-schema.md). A ratificação final

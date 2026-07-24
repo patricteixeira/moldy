@@ -229,6 +229,18 @@ it("fitting escolhe o maior tamanho que cabe via measureText injetado", () => {
   expect(report.overflows).toEqual([]);
 });
 
+it("usa o tamanho autoral como teto quando o slot permite ajuste", () => {
+  const payload = fixturePayload();
+  payload.layoutSpec.slots[0].fontSizePx = 64;
+  payload.layoutSpec.slots[0].area = [48, 324, 984, 300];
+  renderDocument(container, payload, {
+    measureText: (_element, size) => size * 5,
+  });
+
+  const content = container.querySelector<HTMLElement>("[data-slot-content]")!;
+  expect(content.style.fontSize).toBe("60px");
+});
+
 it("overflow é reportado quando nem o mínimo cabe", () => {
   const report = renderDocument(container, fixturePayload(), { measureText: () => 1000 });
   const content = container.querySelector<HTMLElement>("[data-slot-content]")!;
@@ -388,6 +400,7 @@ it("aplica overrides visuais em texto e camadas estruturais", () => {
   payload.contentSpec.overrides = {
     headline: {
       area: [120, 600, 700, 240],
+      rotationDeg: -12,
       opacity: 0.55,
       zIndex: 14,
       colorToken: "color.accent",
@@ -403,6 +416,7 @@ it("aplica overrides visuais em texto e camadas estruturais", () => {
     },
     "diagonal-field": {
       area: [0, 100, 1080, 900],
+      rotationDeg: 18,
       opacity: 0.2,
       zIndex: 4,
       colorToken: "color.accent",
@@ -424,6 +438,8 @@ it("aplica overrides visuais em texto e camadas estruturais", () => {
   ]);
   expect(slot.style.opacity).toBe("0.55");
   expect(slot.style.zIndex).toBe("14");
+  expect(slot.style.transform).toBe("rotate(-12deg)");
+  expect(slot.style.transformOrigin).toBe("center");
   expect(content.style.fontFamily).toBe("sans-serif");
   expect(content.style.fontFamily).not.toContain("br-font-heading");
   expect(content.style.fontSize).toBe("64px");
@@ -447,6 +463,7 @@ it("aplica overrides visuais em texto e camadas estruturais", () => {
   ]);
   expect(motif.style.opacity).toBe("0.2");
   expect(motif.style.zIndex).toBe("4");
+  expect(motif.style.transform).toBe("rotate(18deg)");
   expect(motif.style.backgroundImage).toContain("#CA6B0B 4px");
   expect(motif.style.backgroundImage).toContain("transparent 40px");
 

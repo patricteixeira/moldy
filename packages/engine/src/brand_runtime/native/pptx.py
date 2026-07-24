@@ -247,6 +247,14 @@ def _position_shape(
     shape.top = top
     shape.width = width
     shape.height = height
+    if override is not None and override.rotation_deg is not None:
+        shape.rotation = override.rotation_deg
+
+
+def _apply_rotation(shape, override: LayerOverride | None) -> None:
+    """Mantém no arquivo editável a rotação declarada pelo editor."""
+    if override is not None and override.rotation_deg is not None:
+        shape.rotation = override.rotation_deg
 
 
 def _apply_opacity(shape, opacity: float) -> None:
@@ -312,6 +320,7 @@ def _render_shape_layers(
         left, top, width, height = _normalized_box(presentation, layout, area)
         shape_type = MSO_SHAPE.OVAL if layer.shape == "circle" else MSO_SHAPE.RECTANGLE
         shape = slide.shapes.add_shape(shape_type, left, top, width, height)
+        _apply_rotation(shape, override)
         shape.line.fill.background()
         color_token = (
             override.color_token if override and override.color_token else layer.color_token
@@ -362,6 +371,7 @@ def _render_asset_layers(
         left, top, width, height = _normalized_box(presentation, layout, area)
         with _picture_asset(ir.assets[asset_token].path, asset_root) as asset:
             picture = slide.shapes.add_picture(str(asset), left, top, width=width, height=height)
+        _apply_rotation(picture, override)
         _apply_opacity(
             picture,
             override.opacity if override and override.opacity is not None else layer.opacity,
@@ -729,6 +739,7 @@ def render_pptx(
         area = extra_override.area if extra_override and extra_override.area else extra_slot.area
         left, top, width, height = _normalized_box(presentation, layout, area)
         text_box = slide.shapes.add_textbox(left, top, width, height)
+        _apply_rotation(text_box, extra_override)
         if extra_override is None or not extra_override.hidden:
             _set_text(
                 text_box, extra_value, extra_slot, ir.roles[extra_slot.role], ir, extra_override
@@ -757,6 +768,7 @@ def render_pptx(
         area = image_override.area if image_override and image_override.area else image_slot.area
         left, top, width, height = _normalized_box(presentation, layout, area)
         picture = slide.shapes.add_picture(str(asset), left, top, width=width, height=height)
+        _apply_rotation(picture, image_override)
         _apply_opacity(
             picture,
             image_override.opacity
@@ -798,6 +810,7 @@ def render_pptx(
         left, top, width, height = _normalized_box(presentation, layout, area)
         with _picture_asset(ir.assets[asset_token].path, asset_root) as asset:
             picture = slide.shapes.add_picture(str(asset), left, top, width=width, height=height)
+        _apply_rotation(picture, logo_override)
         _apply_opacity(
             picture,
             logo_override.opacity

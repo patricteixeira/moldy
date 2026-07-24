@@ -116,11 +116,11 @@ it("permite restaurar a composição inicial da peça", async () => {
   expect(await screen.findByTestId("slot-input-headline")).toHaveValue("Apagar este rascunho")
   await userEvent.click(screen.getByRole("button", { name: "Desfazer todos os ajustes" }))
 
-  expect(screen.getByTestId("slot-input-headline")).toHaveValue("ACME em movimento.")
+  expect(screen.getByTestId("slot-input-headline")).toHaveValue("Novidade da ACME.")
   await waitFor(() =>
     expect(JSON.parse(window.localStorage.getItem(key) ?? "{}")).toMatchObject({
       version: 5,
-      values: { headline: { kind: "text", text: "ACME em movimento." } },
+      values: { headline: { kind: "text", text: "Novidade da ACME." } },
       backgroundColorToken: null,
       assetBindings: {},
     }),
@@ -513,18 +513,19 @@ it("salva o slide atual e navega para o próximo ou o anterior dentro do editor"
   )
 })
 
-it("troca todos os textos e todas as logos sem selecionar item por item", async () => {
+it("troca somente a cor do texto selecionado e mantém a troca global de logo", async () => {
   renderEditor(kitClient())
   await screen.findByTestId("slot-input-headline")
 
-  const textChoices = screen.getByRole("group", { name: "Cor de todos os textos da peça" })
+  const textChoices = screen.getByRole("group", { name: "Cor do item: Frase principal" })
   await userEvent.click(
-    within(textChoices).getByRole("button", { name: "Textos: Principal, #1A4D8F" }),
+    within(textChoices).getByRole("button", { name: "Frase principal: Principal, #1A4D8F" }),
   )
   await waitFor(() => {
     const overrides = lastPayload().contentSpec.overrides ?? {}
     expect(overrides.headline?.colorToken).toBe("color.primary")
   })
+  expect(screen.queryByText("Todos os textos")).not.toBeInTheDocument()
 
   await userEvent.selectOptions(screen.getByLabelText("Versão da logo"), "logo.onLight")
   await waitFor(() =>
@@ -532,7 +533,7 @@ it("troca todos os textos e todas as logos sem selecionar item por item", async 
   )
 
   await userEvent.click(
-    screen.getByRole("button", { name: "Usar as cores de texto do modelo" }),
+    screen.getByRole("button", { name: "Usar a cor do modelo para Frase principal" }),
   )
   await waitFor(() => {
     const overrides = lastPayload().contentSpec.overrides ?? {}
@@ -637,7 +638,9 @@ it("oferece edição para textos, formas, grafismos e assets estruturais", async
   await screen.findByRole("textbox", { name: "Frase principal" })
 
   await userEvent.click(screen.getByRole("button", { name: "Linha de destaque" }))
-  expect(screen.getByLabelText("Cor")).toBeInTheDocument()
+  expect(
+    screen.getByRole("group", { name: "Cor do item: Linha de destaque" }),
+  ).toBeInTheDocument()
   expect(screen.getByLabelText("L")).toBeInTheDocument()
 
   await userEvent.click(screen.getByRole("button", { name: "Campo diagonal" }))
@@ -693,7 +696,7 @@ it("explica e aplica uma estrutura derivada da identidade, não um preset cromá
   }
   renderEditor(kitClient({ getBrandRevision: vi.fn(async () => brandIr) }))
 
-  expect(await screen.findByText("Escala sem contenção")).toBeInTheDocument()
+  expect(await screen.findByText("Títulos maiores")).toBeInTheDocument()
   expect(screen.getByText(/sinais confirmados: “dinâmica”, “radical”/i)).toBeInTheDocument()
   await userEvent.click(screen.getByRole("button", { name: "Aplicar esta sugestão" }))
 
@@ -772,11 +775,13 @@ it("edita tipografia, posição, opacidade e escala da logo no arquivo final", a
   fireEvent.change(screen.getByLabelText("Y"), { target: { value: "760" } })
   fireEvent.change(screen.getByLabelText("L"), { target: { value: "1600" } })
   fireEvent.change(screen.getByLabelText("A"), { target: { value: "900" } })
+  fireEvent.change(screen.getByLabelText("Rotação"), { target: { value: "37" } })
   fireEvent.change(screen.getByLabelText("Opacidade"), { target: { value: "44" } })
 
   await waitFor(() =>
     expect(lastPayload().contentSpec.overrides?.logo).toMatchObject({
       area: [-180, 760, 1600, 900],
+      rotationDeg: 37,
       opacity: 0.44,
     }),
   )
@@ -788,7 +793,7 @@ it("arrasta com o ponteiro a camada de texto que já está selecionada", async (
 
   const selection = screen.getByTestId("canvas-selection")
   expect(selection).toHaveAccessibleName(
-    "Item Frase principal selecionado. Arraste para mover ou use as setas do teclado.",
+    "Item Frase principal selecionado. Arraste para mover, use as oito alças para redimensionar ou o ponto circular para girar.",
   )
 
   fireEvent(selection, new MouseEvent("pointerdown", {
@@ -817,6 +822,116 @@ it("arrasta com o ponteiro a camada de texto que já está selecionada", async (
   )
   expect(screen.getByTestId("canvas-selection")).toHaveAttribute("data-layer", "headline")
   expect(screen.getByTestId("preview-canvas")).not.toHaveAttribute("data-dragging")
+})
+
+it("abre o editor com o título testado na lista de modelos", async () => {
+  renderEditor(
+    kitClient(),
+    "statement-post-1x1",
+    "/marcas/brandrev_test/editor/statement-post-1x1?headline=Nova%20cole%C3%A7%C3%A3o",
+  )
+
+  expect(await screen.findByTestId("slot-input-headline")).toHaveValue("Nova coleção")
+})
+
+it("preserva o rascunho salvo mesmo quando o endereço contém um título de teste", async () => {
+  window.localStorage.setItem(
+    "brand-runtime:editor-draft:v1:brandrev_test:statement-post-1x1",
+    JSON.stringify({
+      version: 1,
+      values: { headline: { kind: "text", text: "Rascunho já salvo" } },
+    }),
+  )
+
+  renderEditor(
+    kitClient(),
+    "statement-post-1x1",
+    "/marcas/brandrev_test/editor/statement-post-1x1?headline=Outro%20t%C3%ADtulo",
+  )
+
+  expect(await screen.findByTestId("slot-input-headline")).toHaveValue("Rascunho já salvo")
+})
+
+it("redimensiona a seleção por qualquer uma das oito alças", async () => {
+  renderEditor(kitClient())
+  await screen.findByTestId("slot-input-headline")
+
+  const selection = screen.getByTestId("canvas-selection")
+  const handles = selection.querySelectorAll("[data-resize-handle]")
+  expect(Array.from(handles, (handle) => handle.getAttribute("data-resize-handle"))).toEqual([
+    "nw",
+    "n",
+    "ne",
+    "e",
+    "se",
+    "s",
+    "sw",
+    "w",
+  ])
+
+  const northwest = selection.querySelector<HTMLElement>('[data-resize-handle="nw"]')!
+  fireEvent(northwest, new MouseEvent("pointerdown", {
+    bubbles: true,
+    button: 0,
+    clientX: 83,
+    clientY: 324,
+  }))
+  fireEvent(selection, new MouseEvent("pointermove", {
+    bubbles: true,
+    altKey: true,
+    clientX: 63,
+    clientY: 314,
+  }))
+
+  expect(selection).toHaveStyle({
+    left: "8px",
+    top: "304px",
+    width: "1024px",
+    height: "452px",
+  })
+
+  fireEvent(selection, new MouseEvent("pointerup", {
+    bubbles: true,
+    clientX: 63,
+    clientY: 314,
+  }))
+
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.overrides?.headline?.area).toEqual([8, 304, 1024, 452]),
+  )
+})
+
+it("gira a seleção diretamente no canvas e preserva a rotação no conteúdo", async () => {
+  renderEditor(kitClient())
+  await screen.findByTestId("slot-input-headline")
+
+  const selection = screen.getByTestId("canvas-selection")
+  const rotationHandle = screen.getByRole("button", { name: /Girar Frase principal/ })
+  fireEvent(rotationHandle, new MouseEvent("pointerdown", {
+    bubbles: true,
+    button: 0,
+    clientX: 270,
+    clientY: 210,
+  }))
+  fireEvent(selection, new MouseEvent("pointermove", {
+    bubbles: true,
+    clientX: 330,
+    clientY: 270,
+  }))
+
+  expect(selection).toHaveStyle({ transform: "rotate(90deg)" })
+  expect(screen.getByTestId("preview-canvas")).toHaveAttribute("data-transforming", "rotate")
+
+  fireEvent(selection, new MouseEvent("pointerup", {
+    bubbles: true,
+    clientX: 330,
+    clientY: 270,
+  }))
+
+  await waitFor(() =>
+    expect(lastPayload().contentSpec.overrides?.headline?.rotationDeg).toBe(90),
+  )
+  expect(screen.getByLabelText("Rotação")).toHaveValue(90)
 })
 
 it("encaixa e mostra uma referência quando a camada alinha com a peça", async () => {

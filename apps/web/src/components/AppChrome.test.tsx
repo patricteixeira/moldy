@@ -18,17 +18,33 @@ describe("AppChrome", () => {
     renderChrome("/marcas/brandrev_test/carrossel")
 
     expect(screen.getByRole("link", { name: "Molda, início" })).toHaveAttribute("href", "/")
-    expect(screen.getByRole("link", { name: "Kit" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Modelos" })).toHaveAttribute(
       "href",
       "/marcas/brandrev_test/kit",
     )
-    expect(screen.getByText("Carrossel", { selector: ".app-route-current" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Carrossel" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    )
   })
 
   it("nomeia a área de Word sem parecer uma página inexistente", () => {
     renderChrome("/marcas/brandrev_test/word")
 
-    expect(screen.getByText("Word", { selector: ".app-route-current" })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Word" })).toHaveAttribute("aria-current", "page")
     expect(screen.queryByText("404")).not.toBeInTheDocument()
+  })
+
+  it("mostra as tarefas principais e marca a etapa atual", () => {
+    renderChrome("/marcas/brandrev_test/criar")
+
+    expect(screen.getByRole("link", { name: "Modelos" })).toHaveAttribute(
+      "href",
+      "/marcas/brandrev_test/kit",
+    )
+    expect(screen.getByRole("link", { name: "Nova peça" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    )
   })
 })

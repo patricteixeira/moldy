@@ -3,14 +3,20 @@ import { expect, it } from "vitest"
 import { buildPackageZip } from "./zipPackage"
 
 it("monta o ZIP na convenção do pacote do engine", async () => {
+  const progress: number[] = []
   const blob = await buildPackageZip([
     new File(["%PDF"], "manual.pdf"),
     new File(["<svg/>"], "logo.svg"),
     new File(["png"], "simbolo.png"),
     new File(["ttf"], "titulos.ttf"),
     new File(["{}"], "tokens.json"),
-  ])
-  const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+  ], (percent) => progress.push(percent))
+  const archiveBytes = await blob.arrayBuffer()
+  const firstHeader = new DataView(archiveBytes)
+  expect(firstHeader.getUint32(0, true)).toBe(0x04034b50)
+  expect(firstHeader.getUint16(8, true)).toBe(0)
+  expect(progress.at(-1)).toBe(100)
+  const zip = await JSZip.loadAsync(archiveBytes)
   const paths = Object.values(zip.files)
     .filter((file) => !file.dir)
     .map((file) => file.name)

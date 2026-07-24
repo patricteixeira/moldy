@@ -33,7 +33,7 @@ export function PublishStep({ draftId, answers, onPublished, onBack }: Props) {
       setError(
         typeof cause === "object" && cause !== null && "messagePt" in cause
           ? String(cause.messagePt)
-          : "Não foi possível publicar a marca.",
+          : "Não foi possível salvar a marca.",
       )
     } finally {
       if (generation.current === current) setBusy(false)
@@ -42,8 +42,8 @@ export function PublishStep({ draftId, answers, onPublished, onBack }: Props) {
 
   return (
     <form className="publish-step" onSubmit={submit}>
-      <p className="wizard-progress">Último registro</p>
-      <h2>Como esta marca deve ser chamada?</h2>
+      <p className="wizard-progress">Última etapa</p>
+      <h2>Digite o nome da marca.</h2>
       <label htmlFor="brand-name">Nome da marca</label>
       <input
         id="brand-name"
@@ -66,7 +66,7 @@ export function PublishStep({ draftId, answers, onPublished, onBack }: Props) {
           Voltar
         </button>
         <button data-testid="wizard-publicar" type="submit" disabled={!name.trim() || busy}>
-          {busy ? "Publicando…" : "Publicar marca"}
+          {busy ? "Salvando…" : "Salvar marca"}
         </button>
       </div>
     </form>

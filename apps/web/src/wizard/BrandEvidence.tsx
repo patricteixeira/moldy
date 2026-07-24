@@ -1,34 +1,28 @@
-import { useState } from "react"
-
 const evidence = [
   {
-    name: "Manual",
-    description: "O manual ajuda a entender as regras e o jeito da marca.",
+    name: "Manual em PDF",
+    status: "Recomendado",
+    description: "Cores, tipografia e regras da marca.",
   },
   {
-    name: "Logo",
-    description: "Os arquivos mostram quais versões do logo podem ser usadas.",
+    name: "Logo em SVG ou PNG",
+    status: "Obrigatório",
+    description: "Arquivo principal e versões disponíveis.",
   },
   {
-    name: "Fontes",
-    description: "Os arquivos de fonte fazem os textos aparecerem do jeito certo.",
+    name: "Fontes em TTF ou OTF",
+    status: "Opcional",
+    description: "Use apenas arquivos que você pode enviar.",
   },
 ]
 
-const notes = [
-  "Primeiro, lemos os arquivos que você enviou.",
-  "Quando algo não está claro, você escolhe.",
-  "Depois, suas escolhas aparecem nos modelos da marca.",
+const process = [
+  { name: "Enviar", description: "Adicione os arquivos da marca." },
+  { name: "Conferir", description: "Revise somente os dados incertos." },
+  { name: "Criar", description: "Escolha um modelo e edite a peça." },
 ]
 
 export function BrandEvidence() {
-  const [activeEvidence, setActiveEvidence] = useState(0)
-  const [activeNote, setActiveNote] = useState(0)
-
-  const moveNote = (direction: -1 | 1) => {
-    setActiveNote((current) => (current + direction + notes.length) % notes.length)
-  }
-
   return (
     <aside className="brand-evidence" aria-label="Como usamos os arquivos da marca">
       <figure className="evidence-photo" data-motion-enter>
@@ -42,39 +36,39 @@ export function BrandEvidence() {
         />
       </figure>
 
-      <div className="evidence-accordion" role="group" aria-label="Arquivos usados">
-        {evidence.map((item, index) => {
-          const active = index === activeEvidence
-          return (
-            <button
-              key={item.name}
-              type="button"
-              className="evidence-item"
-              aria-expanded={active}
-              data-active={active || undefined}
-              onClick={() => setActiveEvidence(index)}
-              onFocus={() => setActiveEvidence(index)}
-            >
-              <strong>{item.name}</strong>
-              <span>{item.description}</span>
-            </button>
-          )
-        })}
-      </div>
+      <section className="evidence-checklist" aria-labelledby="evidence-files-title">
+        <p className="panel-kicker">Antes de começar</p>
+        <h2 id="evidence-files-title">Separe estes arquivos</h2>
+        <ul>
+          {evidence.map((item, index) => {
+            return (
+              <li key={item.name} className="evidence-item">
+                <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <strong>{item.name}</strong>
+                  <small>{item.status}</small>
+                  <p>{item.description}</p>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
 
-      <section className="evidence-carousel" aria-label="Como funciona">
-        <p aria-live="polite">{notes[activeNote]}</p>
-        <div className="evidence-carousel-controls">
-          <button type="button" className="text-action" onClick={() => moveNote(-1)}>
-            Anterior
-          </button>
-          <span aria-hidden="true">
-            {activeNote + 1}/{notes.length}
-          </span>
-          <button type="button" className="text-action" onClick={() => moveNote(1)}>
-            Próxima
-          </button>
-        </div>
+      <section className="evidence-process" aria-labelledby="evidence-process-title">
+        <p className="panel-kicker">Como funciona</p>
+        <h2 id="evidence-process-title">Três etapas</h2>
+        <ol>
+          {process.map((item, index) => (
+            <li key={item.name}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div>
+                <strong>{item.name}</strong>
+                <p>{item.description}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
       </section>
     </aside>
   )

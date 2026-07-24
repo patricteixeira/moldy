@@ -38,6 +38,18 @@ def test_put_is_idempotent(tmp_path):
     assert st.get(a) == b"x"
 
 
+def test_put_file_publica_em_streaming_com_o_mesmo_endereco(tmp_path):
+    source = tmp_path / "manual.pdf"
+    source.write_bytes(b"%PDF-" + b"x" * 200_000)
+    st = Storage(tmp_path / "storage")
+
+    sha = st.put_file(source)
+
+    assert sha == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert st.get(sha) == source.read_bytes()
+    assert st.put_file(source) == sha
+
+
 def test_blob_corrompido_e_recusado_e_reparado_pelo_put(tmp_path):
     st = Storage(tmp_path)
     path = st.path_for(HELLO_SHA)

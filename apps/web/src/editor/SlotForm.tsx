@@ -116,7 +116,6 @@ export function SlotForm({
   const modelBackgroundToken =
     layout.background.kind === "color" ? (layout.background.colorToken ?? null) : null
   const activeBackgroundToken = backgroundColorToken ?? modelBackgroundToken
-  const textSlots = layout.slots.filter((slot) => slot.kind === "text")
   const logoSlots = layout.slots.filter((slot) => slot.kind === "logo")
   const logoLayers = (layout.lockedLayers ?? []).filter(
     (layer) => layer.kind === "asset" && layer.assetToken.startsWith("logo."),
@@ -125,21 +124,6 @@ export function SlotForm({
   const availableLogoTokens = logoAssetTokens(brandIr)
   const availableLogoCount = uniqueLogoCount(brandIr)
   const automaticLogoPair = hasAutomaticLogoPair(brandIr)
-  const explicitTextTokens = Array.from(
-    new Set(
-      textSlots
-        .map((slot) => overrides[slot.id]?.colorToken)
-        .filter((token): token is string => typeof token === "string"),
-    ),
-  )
-  const activeTextToken =
-    explicitTextTokens.length === 1 &&
-    textSlots.every((slot) => overrides[slot.id]?.colorToken === explicitTextTokens[0])
-      ? explicitTextTokens[0]
-      : null
-  const hasTextColorOverride = textSlots.some(
-    (slot) => typeof overrides[slot.id]?.colorToken === "string",
-  )
   const explicitLogoTokens = Array.from(
     new Set(
       logoElements
@@ -152,12 +136,42 @@ export function SlotForm({
     logoElements.every((element) => assetBindings[element.id] === explicitLogoTokens[0])
       ? explicitLogoTokens[0]
       : ""
-  const applyTextColor = (colorToken: string | null): void => {
-    for (const slot of textSlots) onPatch(slot.id, { colorToken })
-  }
   const applyLogo = (assetToken: string | null): void => {
     for (const element of logoElements) onAssetBindingChange(element.id, assetToken)
   }
+  const renderColorChoices = ({
+    activeToken,
+    groupLabel,
+    itemLabel,
+    onSelect,
+  }: {
+    activeToken: string | null
+    groupLabel: string
+    itemLabel: string
+    onSelect(colorToken: string): void
+  }): JSX.Element => (
+    <div className="canvas-color-grid" role="group" aria-label={groupLabel}>
+      {Object.entries(brandIr.colors).map(([token, color]) => (
+        <button
+          key={token}
+          type="button"
+          className="canvas-color-option"
+          title={`${humanizeToken(token, "color.")} · ${color.value}`}
+          aria-label={`${itemLabel}: ${humanizeToken(token, "color.")}, ${color.value}`}
+          aria-pressed={activeToken === token}
+          data-active={activeToken === token || undefined}
+          disabled={disabled}
+          onClick={() => onSelect(token)}
+        >
+          <span className="canvas-color-swatch" style={{ backgroundColor: color.value }} />
+          <span>
+            <b>{humanizeToken(token, "color.")}</b>
+            <small>{color.value}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  )
   const logoPanel =
     logoElements.length > 0 ? (
       <section className="inspector-section canvas-logo-quick logo-binding-panel">
@@ -169,6 +183,7 @@ export function SlotForm({
           <span>Versão da logo</span>
           <select
             id="canvas-logo-binding"
+            name="canvas-logo-binding"
             value={activeLogoToken}
             disabled={disabled}
             onChange={(event) => applyLogo(event.currentTarget.value || null)}
@@ -198,84 +213,32 @@ export function SlotForm({
         )}
       </section>
     ) : null
-  const appearancePanel = (
-    <section className="inspector-section canvas-background-panel">
+  const backgroundPanel = (
+    <section className="inspector-section canvas-background-panel canvas-global-control">
       <div className="canvas-background-heading">
         <div>
-          <h3>Cores da peça</h3>
-          <p className="field-guidance">Fundo e textos continuam independentes.</p>
+          <p className="panel-kicker">Ajuste global</p>
+          <h3>Fundo da peça</h3>
+          <p className="field-guidance">
+            Altera somente o fundo. O item selecionado mantém sua própria cor.
+          </p>
         </div>
+        <button
+          type="button"
+          className="canvas-background-reset"
+          aria-label="Usar o fundo do modelo"
+          disabled={disabled || backgroundColorToken === null}
+          onClick={() => onBackgroundColorChange(null)}
+        >
+          Usar o modelo
+        </button>
       </div>
-      <div className="canvas-appearance-group">
-        <div className="canvas-background-heading">
-          <strong>Fundo</strong>
-          <button
-            type="button"
-            className="canvas-background-reset"
-            aria-label="Usar o fundo do modelo"
-            disabled={disabled || backgroundColorToken === null}
-            onClick={() => onBackgroundColorChange(null)}
-          >
-            Usar o modelo
-          </button>
-        </div>
-        <div className="canvas-color-grid" role="group" aria-label="Cor de fundo da peça">
-          {Object.entries(brandIr.colors).map(([token, color]) => (
-            <button
-              key={token}
-              type="button"
-              className="canvas-color-option"
-              title={`${humanizeToken(token, "color.")} · ${color.value}`}
-              aria-label={`Fundo: ${humanizeToken(token, "color.")}, ${color.value}`}
-              aria-pressed={activeBackgroundToken === token}
-              data-active={activeBackgroundToken === token || undefined}
-              disabled={disabled}
-              onClick={() => onBackgroundColorChange(token)}
-            >
-              <span className="canvas-color-swatch" style={{ backgroundColor: color.value }} />
-              <span>
-                <b>{humanizeToken(token, "color.")}</b>
-                <small>{color.value}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="canvas-appearance-group">
-        <div className="canvas-background-heading">
-          <strong>Todos os textos</strong>
-          <button
-            type="button"
-            className="canvas-background-reset"
-            aria-label="Usar as cores de texto do modelo"
-            disabled={disabled || !hasTextColorOverride}
-            onClick={() => applyTextColor(null)}
-          >
-            Usar o modelo
-          </button>
-        </div>
-        <div className="canvas-color-grid" role="group" aria-label="Cor de todos os textos da peça">
-          {Object.entries(brandIr.colors).map(([token, color]) => (
-            <button
-              key={token}
-              type="button"
-              className="canvas-color-option"
-              title={`${humanizeToken(token, "color.")} · ${color.value}`}
-              aria-label={`Textos: ${humanizeToken(token, "color.")}, ${color.value}`}
-              aria-pressed={activeTextToken === token}
-              data-active={activeTextToken === token || undefined}
-              disabled={disabled || textSlots.length === 0}
-              onClick={() => applyTextColor(token)}
-            >
-              <span className="canvas-color-swatch" style={{ backgroundColor: color.value }} />
-              <span>
-                <b>{humanizeToken(token, "color.")}</b>
-                <small>{color.value}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {renderColorChoices({
+        activeToken: activeBackgroundToken,
+        groupLabel: "Cor de fundo da peça",
+        itemLabel: "Fundo",
+        onSelect: onBackgroundColorChange,
+      })}
     </section>
   )
 
@@ -317,7 +280,7 @@ export function SlotForm({
     return (
       <aside className="slot-form layer-inspector">
         {logoPanel}
-        {appearancePanel}
+        {backgroundPanel}
         <DirectionPanel
           brandIr={brandIr}
           surface={surface}
@@ -332,6 +295,7 @@ export function SlotForm({
 
   const override = overrides[element.id] ?? {}
   const area = elementArea(element, override)
+  const rotationDeg = override.rotationDeg ?? 0
   const opacity = elementOpacity(element, override)
   const zIndex = elementZIndex(element, override)
   const setAreaValue = (index: number, raw: string): void => {
@@ -356,6 +320,7 @@ export function SlotForm({
     const defaultFontToken = role?.font ?? Object.keys(brandIr.fonts)[0] ?? ""
     const fontToken = override.fontToken ?? defaultFontToken
     const font = brandIr.fonts[fontToken]
+    const activeColorToken = override.colorToken ?? slot.colorToken ?? null
     const emphasisIsAmbiguous =
       emphasis.length > 0 && exactOccurrenceCount(text, emphasis) !== 1
 
@@ -398,8 +363,10 @@ export function SlotForm({
               <label htmlFor={`slot-emphasis-input-${slot.id}`}>Trecho em destaque</label>
               <input
                 id={`slot-emphasis-input-${slot.id}`}
+                name={`slot-emphasis-${slot.id}`}
                 data-testid={`slot-emphasis-input-${slot.id}`}
                 type="text"
+                autoComplete="off"
                 disabled={disabled || text.length === 0}
                 required
                 aria-required="true"
@@ -429,10 +396,34 @@ export function SlotForm({
 
         <section className="inspector-section">
           <h3>Fonte e texto</h3>
+          <div className="item-color-control">
+            <div className="canvas-background-heading">
+              <div>
+                <strong>Cor deste texto</strong>
+                <p className="field-guidance">Afeta apenas {elementLabel(slot)}.</p>
+              </div>
+              <button
+                type="button"
+                className="canvas-background-reset"
+                aria-label={`Usar a cor do modelo para ${elementLabel(slot)}`}
+                disabled={disabled || override.colorToken == null}
+                onClick={() => onPatch(slot.id, { colorToken: null })}
+              >
+                Usar o modelo
+              </button>
+            </div>
+            {renderColorChoices({
+              activeToken: activeColorToken,
+              groupLabel: `Cor do item: ${elementLabel(slot)}`,
+              itemLabel: elementLabel(slot),
+              onSelect: (colorToken) => onPatch(slot.id, { colorToken }),
+            })}
+          </div>
           <div className="inspector-grid inspector-grid-two">
             <label>
               <span>Fonte</span>
               <select
+                name={`slot-font-${slot.id}`}
                 value={fontToken}
                 disabled={disabled}
                 onChange={(event) => onPatch(slot.id, { fontToken: event.currentTarget.value })}
@@ -445,6 +436,7 @@ export function SlotForm({
             <label>
               <span>Peso</span>
               <select
+                name={`slot-weight-${slot.id}`}
                 value={override.fontWeight ?? font?.weight ?? 400}
                 disabled={disabled}
                 onChange={(event) => onPatch(slot.id, { fontWeight: Number(event.currentTarget.value) })}
@@ -457,6 +449,7 @@ export function SlotForm({
             <label>
               <span>Tamanho</span>
               <input
+                name={`slot-size-${slot.id}`}
                 type="number"
                 min="6"
                 max="1024"
@@ -471,6 +464,7 @@ export function SlotForm({
             <label>
               <span>Estilo</span>
               <select
+                name={`slot-style-${slot.id}`}
                 value={override.fontStyle ?? font?.style ?? "normal"}
                 disabled={disabled}
                 onChange={(event) =>
@@ -484,6 +478,7 @@ export function SlotForm({
             <label>
               <span>Espaço entre linhas</span>
               <input
+                name={`slot-line-height-${slot.id}`}
                 type="number"
                 min="0.5"
                 max="3"
@@ -499,6 +494,7 @@ export function SlotForm({
             <label>
               <span>Espaço entre letras</span>
               <input
+                name={`slot-letter-spacing-${slot.id}`}
                 type="number"
                 min="-0.25"
                 max="1"
@@ -512,25 +508,11 @@ export function SlotForm({
               />
             </label>
           </div>
-          <div className="inspector-grid inspector-grid-two">
-            <label>
-              <span>Cor</span>
-              <select
-                value={override.colorToken ?? ""}
-                disabled={disabled}
-                onChange={(event) =>
-                  onPatch(slot.id, { colorToken: event.currentTarget.value || null })
-                }
-              >
-                <option value="">Cor definida pela marca</option>
-                {Object.entries(brandIr.colors).map(([token, item]) => (
-                  <option key={token} value={token}>{item.value}</option>
-                ))}
-              </select>
-            </label>
+          <div className="inspector-grid">
             <label>
               <span>Caixa</span>
               <select
+                name={`slot-case-${slot.id}`}
                 value={override.textTransform ?? slot.textTransform ?? "none"}
                 disabled={disabled}
                 onChange={(event) =>
@@ -566,13 +548,13 @@ export function SlotForm({
   const selectedAssetIsLogo =
     element.kind === "logo" ||
     (element.kind === "asset" && element.assetToken.startsWith("logo."))
+  const modelElementColorToken = "colorToken" in element ? (element.colorToken ?? null) : null
   const selectedAssetTokens = selectedAssetIsLogo
     ? availableLogoTokens
     : Object.keys(brandIr.assets).sort((left, right) => left.localeCompare(right))
 
   return (
     <form className="slot-form layer-inspector" onSubmit={(event) => event.preventDefault()}>
-      {selectedAssetIsLogo ? null : logoPanel}
       <div className="panel-heading inspector-heading">
         <div>
           <p className="panel-kicker">Ajustes</p>
@@ -592,6 +574,7 @@ export function SlotForm({
           <h3>Imagem</h3>
           <input
             id={`slot-image-input-${element.id}`}
+            name={`slot-image-${element.id}`}
             data-testid={`slot-image-input-${element.id}`}
             type="file"
             accept="image/png,image/jpeg"
@@ -611,6 +594,7 @@ export function SlotForm({
             <span>{selectedAssetIsLogo ? "Logo usada neste item" : "Arquivo usado neste item"}</span>
             <select
               id={`slot-logo-binding-${element.id}`}
+              name={`slot-asset-${element.id}`}
               data-testid={`slot-logo-binding-${element.id}`}
               value={assetBindings[element.id] ?? ""}
               disabled={disabled}
@@ -652,26 +636,35 @@ export function SlotForm({
         <section className="inspector-section">
           <h3>Aparência</h3>
           {canColor ? (
-            <label>
-              <span>Cor</span>
-              <select
-                value={override.colorToken ?? ""}
-                disabled={disabled}
-                onChange={(event) =>
-                  onPatch(element.id, { colorToken: event.currentTarget.value || null })
-                }
-              >
-                <option value="">Cor definida pela marca</option>
-                {Object.entries(brandIr.colors).map(([token, item]) => (
-                  <option key={token} value={token}>{item.value}</option>
-                ))}
-              </select>
-            </label>
+            <div className="item-color-control">
+              <div className="canvas-background-heading">
+                <div>
+                  <strong>Cor deste item</strong>
+                  <p className="field-guidance">Afeta apenas {elementLabel(element)}.</p>
+                </div>
+                <button
+                  type="button"
+                  className="canvas-background-reset"
+                  aria-label={`Usar a cor do modelo para ${elementLabel(element)}`}
+                  disabled={disabled || override.colorToken == null}
+                  onClick={() => onPatch(element.id, { colorToken: null })}
+                >
+                  Usar o modelo
+                </button>
+              </div>
+              {renderColorChoices({
+                activeToken: override.colorToken ?? modelElementColorToken,
+                groupLabel: `Cor do item: ${elementLabel(element)}`,
+                itemLabel: elementLabel(element),
+                onSelect: (colorToken) => onPatch(element.id, { colorToken }),
+              })}
+            </div>
           ) : null}
           {canFit ? (
             <label>
               <span>Como preencher o espaço</span>
               <select
+                name={`slot-fit-${element.id}`}
                 value={override.fit ?? ("fit" in element ? element.fit : "contain") ?? "contain"}
                 disabled={disabled}
                 onChange={(event) =>
@@ -688,6 +681,7 @@ export function SlotForm({
               <label>
                 <span>Traço</span>
                 <input
+                  name={`slot-stroke-${element.id}`}
                   type="number"
                   min="0.1"
                   max="20"
@@ -702,6 +696,7 @@ export function SlotForm({
               <label>
                 <span>Intervalo</span>
                 <input
+                  name={`slot-spacing-${element.id}`}
                   type="number"
                   min="1"
                   max="256"
@@ -728,6 +723,7 @@ export function SlotForm({
             <label key={label}>
               <span>{label}</span>
               <input
+                name={`slot-${element.id}-${label.toLocaleLowerCase("pt-BR")}`}
                 type="number"
                 min={index < 2 ? -MAX_EDITOR_AREA_PX : 1}
                 max={MAX_EDITOR_AREA_PX}
@@ -738,6 +734,34 @@ export function SlotForm({
             </label>
           ))}
         </div>
+        <div className="rotation-field">
+          <label htmlFor={`rotation-input-${element.id}`}>Rotação</label>
+          <span className="rotation-input">
+            <input
+              id={`rotation-input-${element.id}`}
+              name={`slot-rotation-${element.id}`}
+              type="number"
+              min="-180"
+              max="180"
+              step="1"
+              value={rotationDeg}
+              disabled={disabled}
+              aria-describedby={`rotation-guidance-${element.id}`}
+              onChange={(event) => {
+                const value = numberValue(event.currentTarget.value)
+                if (value !== null) {
+                  onPatch(element.id, {
+                    rotationDeg: Math.max(-180, Math.min(180, value)),
+                  })
+                }
+              }}
+            />
+            <span aria-hidden="true">°</span>
+          </span>
+          <small id={`rotation-guidance-${element.id}`}>
+            Arraste o ponto circular na peça. Segure Shift para intervalos de 15°.
+          </small>
+        </div>
       </section>
 
       <section className="inspector-section">
@@ -745,6 +769,7 @@ export function SlotForm({
         <label className="range-field">
           <span>Opacidade</span>
           <input
+            name={`slot-opacity-${element.id}`}
             type="range"
             min="0"
             max="100"
@@ -758,6 +783,7 @@ export function SlotForm({
           <label>
             <span>Ordem</span>
             <input
+              name={`slot-order-${element.id}`}
               type="number"
               min="0"
               max="20"
@@ -772,6 +798,7 @@ export function SlotForm({
           <label className="toggle-field">
             <span>Visível</span>
             <input
+              name={`slot-visible-${element.id}`}
               type="checkbox"
               checked={!override.hidden}
               disabled={disabled}
@@ -789,7 +816,8 @@ export function SlotForm({
       >
         Desfazer ajustes deste item
       </button>
-      {appearancePanel}
+      {backgroundPanel}
+      {selectedAssetIsLogo ? null : logoPanel}
       <DirectionPanel
         brandIr={brandIr}
         surface={surface}

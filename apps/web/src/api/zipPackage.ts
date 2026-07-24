@@ -7,7 +7,10 @@ const PACKAGE_DIRECTORIES: Record<string, string> = {
   ".otf": "fonts",
 }
 
-export async function buildPackageZip(files: File[]): Promise<Blob> {
+export async function buildPackageZip(
+  files: File[],
+  onProgress?: (percent: number) => void,
+): Promise<Blob> {
   const zip = new JSZip()
   const destinations = new Set<string>()
   for (const file of files) {
@@ -31,5 +34,8 @@ export async function buildPackageZip(files: File[]): Promise<Blob> {
     destinations.add(key)
     zip.file(path, file)
   }
-  return zip.generateAsync({ type: "blob", compression: "DEFLATE" })
+  return zip.generateAsync(
+    { type: "blob", compression: "STORE" },
+    ({ percent }) => onProgress?.(percent),
+  )
 }

@@ -5,13 +5,12 @@ from __future__ import annotations
 import hashlib
 import logging
 import shutil
-from io import BytesIO
 from pathlib import Path
 from struct import error as StructError
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, BinaryIO, Literal
 
 import pymupdf
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fontTools.ttLib import TTFont, TTLibError
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -32,6 +31,7 @@ from brand_api.fonts import (
 )
 from brand_api.fonts.catalog import normalize_family
 from brand_api.fonts.intake import FontCandidateResolution
+from brand_api.intake_telemetry import IntakeTelemetry
 from brand_api.media import asset_response, content_type_for
 from brand_api.models import Brand, BrandRevision, Draft
 from brand_api.unzip import UnzipError, safe_unpack
@@ -49,6 +49,7 @@ from brand_runtime.ecosystem import MANIFEST_FILENAME
 from brand_runtime.intake.draft import DraftQuestion
 from brand_runtime.intake.base import Candidate
 from brand_runtime.intake.dtcg import DtcgError
+from brand_runtime.intake.pdf_text import clear_pdf_text_cache
 from brand_runtime.intake.svg_logo import SvgInvalid, sanitize_svg
 from brand_runtime.ir.models import Diagnostic, Evidence
 from brand_runtime.kit.generator import KitGenerationError
@@ -119,7 +120,7 @@ def _store_manifest(request: Request, package_dir: Path, manifest: dict[str, str
     """Publica cada arquivo sanitizado no storage e reafirma seu hash real."""
     for relative in sorted(manifest):
         path = _manifest_file(package_dir, relative)
-        manifest[relative] = request.app.state.storage.put(path.read_bytes())
+        manifest[relative] = request.app.state.storage.put_file(path)
 
 
 def _store_new_manifest_entries(
@@ -133,7 +134,7 @@ def _store_new_manifest_entries(
         raise RuntimeError("A resolução tipográfica tentou alterar o manifest existente.")
     for relative in sorted(set(manifest).difference(previous_manifest)):
         path = _manifest_file(package_dir, relative)
-        stored_sha256 = request.app.state.storage.put(path.read_bytes())
+        stored_sha256 = request.app.state.storage.put_file(path)
         if stored_sha256 != manifest[relative]:
             raise RuntimeError("Um novo recurso tipográfico perdeu integridade no storage.")
 
@@ -153,26 +154,26 @@ def _files_with_suffixes(directory: Path, suffixes: set[str]) -> list[Path]:
 
 
 def _validate_media_files(package_dir: Path, *, max_image_pixels: int) -> None:
-    """Valida mídia hostil em memória antes de o motor abrir paths no Windows."""
+    """Valida mídia hostil por arquivo sem duplicar seus bytes na memória."""
     try:
         pdfs = [
             *_files_with_suffixes(package_dir, {".pdf"}),
             *_files_with_suffixes(package_dir / "references", {".pdf"}),
         ]
         for path in pdfs:
-            with pymupdf.open(stream=path.read_bytes(), filetype="pdf") as document:
+            with pymupdf.open(str(path)) as document:
                 if document.needs_pass:
                     raise pymupdf.FileDataError("PDF protegido por senha")
 
         for path in _files_with_suffixes(package_dir / "assets" / "logos", {".png"}):
-            with Image.open(BytesIO(path.read_bytes())) as image:
+            with Image.open(path) as image:
                 if image.width * image.height > max_image_pixels:
                     raise ValueError("Imagem acima do limite de pixels")
                 image.verify()
 
         fonts_dir = package_dir / "fonts"
         for path in _files_with_suffixes(fonts_dir, {".otf", ".ttf"}):
-            with TTFont(BytesIO(path.read_bytes()), lazy=False) as font:
+            with TTFont(str(path), lazy=True) as font:
                 # O intake depende destas tabelas; acessá-las aqui transforma
                 # ausência estrutural em erro de entrada antes do build.
                 font["name"]
@@ -191,6 +192,14 @@ def _validate_media_files(package_dir: Path, *, max_image_pixels: int) -> None:
         pymupdf.FileDataError,
     ) as exc:
         raise InvalidBrandMedia from exc
+
+
+def _file_size(handle: BinaryIO) -> int:
+    """Mede um upload seekable sem copiar o conteúdo para a RAM."""
+    handle.seek(0, 2)
+    size = handle.tell()
+    handle.seek(0)
+    return size
 
 
 def _upsert_brand(session: Session, name: str) -> Brand:
@@ -237,26 +246,29 @@ def _insert_revision_once(
 )
 async def import_brand(
     request: Request,
+    response: Response,
     package: Annotated[UploadFile, File()],
 ) -> ImportResponse:
     """Converte um pacote ZIP hostil em draft sanitizado e persistido."""
+    draft_id = new_id("draft")
+    telemetry = IntakeTelemetry(draft_id=draft_id, logger=logger)
     limit = request.app.state.settings.max_upload_bytes
     try:
-        uploaded = await package.read(limit + 1)
+        await package.seek(0)
+        uploaded_size = _file_size(package.file)
+        if uploaded_size > limit:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="O arquivo enviado excede o tamanho máximo permitido.",
+            )
+        package_dir = request.app.state.settings.packages_dir / draft_id
+        try:
+            unpacked = safe_unpack(package.file, package_dir)
+        except UnzipError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     finally:
         await package.close()
-    if len(uploaded) > limit:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail="O arquivo enviado excede o tamanho máximo permitido.",
-        )
-
-    draft_id = new_id("draft")
-    package_dir = request.app.state.settings.packages_dir / draft_id
-    try:
-        unpacked = safe_unpack(uploaded, package_dir)
-    except UnzipError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    telemetry.mark("unpack")
 
     manifest = dict(unpacked.manifest)
     if MANIFEST_FILENAME in manifest:
@@ -271,6 +283,7 @@ async def import_brand(
         except PackageValidationError as exc:
             shutil.rmtree(package_dir, ignore_errors=True)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    telemetry.mark("package-contract")
     try:
         _sanitize_svgs(package_dir, manifest)
     except (SvgInvalid, OSError) as exc:
@@ -279,6 +292,7 @@ async def import_brand(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="O pacote contém um SVG inválido.",
         ) from exc
+    telemetry.mark("svg-sanitization")
 
     try:
         # O pacote inteiro precisa ser interpretável antes de qualquer publicação
@@ -287,17 +301,24 @@ async def import_brand(
             package_dir,
             max_image_pixels=request.app.state.settings.max_image_pixels,
         )
-        draft = build_draft(
-            package_dir,
-            translator=request.app.state.identity_translator,
-        )
+        telemetry.mark("media-validation")
+        try:
+            draft = build_draft(
+                package_dir,
+                translator=request.app.state.identity_translator,
+            )
+        finally:
+            clear_pdf_text_cache()
+            telemetry.mark("draft-analysis")
         await resolve_draft_fonts(
             draft,
             package_dir,
             manifest,
             request.app.state.font_resolver,
         )
+        telemetry.mark("font-resolution")
         _store_manifest(request, package_dir, manifest)
+        telemetry.mark("storage")
         serialized = draft.model_dump(mode="json", by_alias=True)
         with request.app.state.session_factory() as session:
             session.add(
@@ -310,6 +331,7 @@ async def import_brand(
                 )
             )
             session.commit()
+        telemetry.mark("persistence")
     except (
         DtcgError,
         InvalidBrandMedia,
@@ -331,6 +353,7 @@ async def import_brand(
         shutil.rmtree(package_dir, ignore_errors=True)
         raise
 
+    response.headers["Server-Timing"] = telemetry.server_timing()
     return ImportResponse(
         draft_id=draft_id,
         questions=[

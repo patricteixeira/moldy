@@ -166,15 +166,15 @@ export function IdentityOptions({ candidates, selected, onSelect }: Props) {
       <div className="identity-review-intro">
         <strong>
           {translatedLocally
-            ? "O Molda traduziu e preparou uma leitura curta."
+            ? "O Molda traduziu os dados encontrados."
             : hasEvidence
-              ? "O Molda preparou uma leitura curta."
-              : "Faltou esta parte no manual."}
+              ? "Confira os dados encontrados."
+              : "Esta informação não apareceu no manual."}
         </strong>
         <span>
           {hasEvidence
-            ? "Confira apenas o sentido. Se algo não soar como a marca, escreva por cima com as suas palavras."
-            : "Escreva do seu jeito somente o que reconhecer. O Molda usa isso para decidir hierarquia, espaço, contraste e ritmo."}
+            ? "Corrija somente o que estiver errado."
+            : "Preencha com palavras simples. Essas respostas ajudam a ordenar os modelos."}
         </span>
         {translatedLocally && (
           <span className="identity-translation-note">
@@ -191,41 +191,47 @@ export function IdentityOptions({ candidates, selected, onSelect }: Props) {
 
       <label className="identity-field identity-field-essence">
         <span className="identity-field-heading">
-          <strong>O que a marca entrega às pessoas</strong>
+          <strong>O que a marca oferece?</strong>
           <small>Em uma frase clara</small>
         </span>
-        <span className="identity-field-help">O que alguém sente, alcança ou transforma com a marca.</span>
+        <span className="identity-field-help">Informe o principal produto, serviço ou benefício.</span>
         <textarea
-          aria-label="O que a marca entrega às pessoas"
+          name="brand-offer"
+          aria-label="O que a marca oferece"
+          autoComplete="off"
           required
           rows={3}
           value={value.essence}
-          placeholder="Ex.: Criamos roupas que transformam presença em expressão."
+          placeholder="Ex.: Roupas sob medida para o dia a dia."
           onChange={(event) => patch("essence", event.currentTarget.value)}
         />
       </label>
       <label className="identity-field">
         <span className="identity-field-heading">
-          <strong>Que impressão ela deve deixar</strong>
+          <strong>Como a marca deve parecer?</strong>
           <small>Use palavras comuns</small>
         </span>
         <span className="identity-field-help">Por exemplo: séria, próxima, ousada, tranquila ou precisa.</span>
         <textarea
-          aria-label="Que impressão a marca deve deixar"
+          name="brand-appearance"
+          aria-label="Como a marca deve parecer"
+          autoComplete="off"
           rows={3}
           value={value.personality}
-          placeholder="Ex.: silenciosa, sofisticada e inesquecível."
+          placeholder="Ex.: sóbria, sofisticada e direta."
           onChange={(event) => patch("personality", event.currentTarget.value)}
         />
       </label>
       <label className="identity-field">
         <span className="identity-field-heading">
-          <strong>Como ela conversa com as pessoas</strong>
-          <small>Imagine uma conversa</small>
+          <strong>Como a marca escreve?</strong>
+          <small>Tom dos textos</small>
         </span>
-        <span className="identity-field-help">Pense em uma legenda, um anúncio ou uma resposta ao cliente.</span>
+        <span className="identity-field-help">Pense em uma legenda, anúncio ou resposta ao cliente.</span>
         <textarea
-          aria-label="Como a marca conversa com as pessoas"
+          name="brand-writing"
+          aria-label="Como a marca escreve?"
+          autoComplete="off"
           rows={3}
           value={value.voice}
           placeholder="Ex.: frases curtas, diretas e sem exagero."
@@ -239,7 +245,9 @@ export function IdentityOptions({ candidates, selected, onSelect }: Props) {
         </span>
         <span className="identity-field-help">Palavras, atitudes ou escolhas visuais que descaracterizam a marca.</span>
         <textarea
+          name="brand-avoid"
           aria-label="O que nunca deve aparecer na marca"
+          autoComplete="off"
           rows={3}
           value={value.avoid}
           placeholder="Ex.: urgência, descontos, emoji ou visual carregado."

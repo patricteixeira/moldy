@@ -35,10 +35,15 @@ def main() -> None:
         assert abs(height - 842) <= 2
         return
 
-    if kind == "pptx":
+    if kind in {"pptx", "pptx-4x5"}:
         presentation = Presentation(path)
         assert len(presentation.slides) == 1
-        assert presentation.slide_width == presentation.slide_height
+        if kind == "pptx-4x5":
+            assert abs(
+                presentation.slide_width / presentation.slide_height - 4 / 5
+            ) < 0.001
+        else:
+            assert presentation.slide_width == presentation.slide_height
         slide = presentation.slides[0]
         text = "\n".join(
             shape.text

@@ -17,6 +17,13 @@ import {
   type AlignmentTarget,
 } from "./alignmentGuides"
 import { mountRender, type RenderHandle } from "./mount"
+import {
+  normalizeRotation,
+  RESIZE_HANDLES,
+  resizeAnchors,
+  resizeAreaFromHandle,
+  type ResizeHandle,
+} from "./transformGeometry"
 
 interface PreviewProps {
   brandIr: BrandIr
@@ -26,16 +33,22 @@ interface PreviewProps {
   maxWidthPx: number
   selectedLayerId?: string | null
   selectedArea?: [number, number, number, number] | null
+  selectedRotation?: number
   onSelectLayer?(id: string | null): void
   onAreaChange?(id: string, area: [number, number, number, number]): void
+  onRotationChange?(id: string, rotationDeg: number): void
 }
 
 interface PointerSession {
   id: string
-  action: "move" | "resize"
+  action: "move" | "resize" | "rotate"
+  resizeHandle: ResizeHandle | null
   startClientX: number
   startClientY: number
   startArea: [number, number, number, number]
+  startRotationDeg: number
+  rotationCenterClient: [number, number] | null
+  startPointerAngleDeg: number | null
   alignmentTargets: AlignmentTarget[]
   layerElement: HTMLElement | null
   hasMoved: boolean
@@ -63,8 +76,10 @@ export function Preview({
   maxWidthPx,
   selectedLayerId = null,
   selectedArea = null,
+  selectedRotation = 0,
   onSelectLayer,
   onAreaChange,
+  onRotationChange,
 }: PreviewProps): JSX.Element {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const renderRootRef = useRef<HTMLDivElement>(null)
@@ -72,6 +87,7 @@ export function Preview({
   const skippedInitialUpdate = useRef(false)
   const pointerSessionRef = useRef<PointerSession | null>(null)
   const liveAreaRef = useRef<[number, number, number, number] | null>(null)
+  const liveRotationRef = useRef<number | null>(null)
   const selectionRef = useRef<HTMLDivElement>(null)
   const scaleRef = useRef(1)
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([])
@@ -152,21 +168,51 @@ export function Preview({
     }
   }
 
+  const applyLiveRotation = (session: PointerSession, rotationDeg: number): void => {
+    const transform = rotationDeg === 0 ? "" : `rotate(${rotationDeg}deg)`
+    const selection = selectionRef.current
+    if (selection?.dataset.selectionLayer === session.id) {
+      selection.style.transform = transform
+    }
+    if (session.layerElement) {
+      session.layerElement.style.transform = transform
+      session.layerElement.style.transformOrigin = "center"
+    }
+  }
+
   const startInteraction = (
     event: ReactPointerEvent<HTMLDivElement>,
     id: string,
-    action: "move" | "resize",
+    action: "move" | "resize" | "rotate",
+    resizeHandle: ResizeHandle | null = null,
   ): void => {
-    if (event.button !== 0 || !onAreaChange) return
+    if (
+      event.button !== 0 ||
+      (action === "rotate" ? !onRotationChange : !onAreaChange)
+    ) return
     const element = findEditorElement(layoutSpec, id)
     if (!element) return
     const startArea = elementArea(element, contentSpec.overrides?.[id])
+    const startRotationDeg = contentSpec.overrides?.[id]?.rotationDeg ?? 0
+    const nativeRect = event.currentTarget.getBoundingClientRect()
+    const centerClient: [number, number] = [
+      nativeRect.left + (startArea[0] + startArea[2] / 2) * scaleRef.current,
+      nativeRect.top + (startArea[1] + startArea[3] / 2) * scaleRef.current,
+    ]
+    const pointerAngleDeg = Math.atan2(
+      event.clientY - centerClient[1],
+      event.clientX - centerClient[0],
+    ) * 180 / Math.PI
     pointerSessionRef.current = {
       id,
       action,
+      resizeHandle,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startArea,
+      startRotationDeg,
+      rotationCenterClient: action === "rotate" ? centerClient : null,
+      startPointerAngleDeg: action === "rotate" ? pointerAngleDeg : null,
       alignmentTargets: buildAlignmentTargets(layoutSpec, contentSpec, id),
       layerElement: Array.from(
         renderRootRef.current?.querySelectorAll<HTMLElement>(
@@ -178,15 +224,27 @@ export function Preview({
       hasMoved: false,
     }
     liveAreaRef.current = startArea
+    liveRotationRef.current = startRotationDeg
     event.currentTarget.setPointerCapture?.(event.pointerId)
     event.preventDefault()
   }
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
     const target = event.target as HTMLElement
+    const rotationHandle = target.closest<HTMLElement>("[data-rotation-handle]")
+    if (rotationHandle && selectedLayerId) {
+      startInteraction(event, selectedLayerId, "rotate")
+      return
+    }
+
     const resizeHandle = target.closest<HTMLElement>("[data-resize-handle]")
     if (resizeHandle && selectedLayerId) {
-      startInteraction(event, selectedLayerId, "resize")
+      startInteraction(
+        event,
+        selectedLayerId,
+        "resize",
+        resizeHandle.dataset.resizeHandle as ResizeHandle,
+      )
       return
     }
 
@@ -213,21 +271,52 @@ export function Preview({
       if (Math.hypot(clientDx, clientDy) < DRAG_START_THRESHOLD_PX) return
       session.hasMoved = true
       wrapperRef.current?.setAttribute("data-dragging", "true")
+      wrapperRef.current?.setAttribute("data-transforming", session.action)
     }
+
+    if (session.action === "rotate") {
+      if (!session.rotationCenterClient || session.startPointerAngleDeg === null) return
+      const currentAngleDeg = Math.atan2(
+        event.clientY - session.rotationCenterClient[1],
+        event.clientX - session.rotationCenterClient[0],
+      ) * 180 / Math.PI
+      const angleDelta = normalizeRotation(currentAngleDeg - session.startPointerAngleDeg)
+      const rawRotation = normalizeRotation(session.startRotationDeg + angleDelta)
+      const nextRotation = event.shiftKey
+        ? normalizeRotation(Math.round(rawRotation / 15) * 15)
+        : rawRotation
+      setAlignmentGuides([])
+      liveRotationRef.current = nextRotation
+      applyLiveRotation(session, nextRotation)
+      return
+    }
+
     const dx = clientDx / scaleRef.current
     const dy = clientDy / scaleRef.current
     const [x, y, width, height] = session.startArea
     const rawArea =
       session.action === "move"
         ? normalizeEditorArea([x + dx, y + dy, width, height])
-        : normalizeEditorArea([x, y, width + dx, height + dy])
-    const snapped = event.altKey
+        : normalizeEditorArea(
+            resizeAreaFromHandle(
+              session.startArea,
+              session.resizeHandle ?? "se",
+              dx,
+              dy,
+              session.startRotationDeg,
+            ),
+          )
+    const canSnapResize = session.action !== "resize" || session.startRotationDeg === 0
+    const snapped = event.altKey || !canSnapResize
       ? { area: rawArea, guides: [] }
       : snapEditorArea(
           rawArea,
           session.action,
           session.alignmentTargets,
           ALIGNMENT_SNAP_THRESHOLD_SCREEN_PX / scaleRef.current,
+          session.action === "resize" && session.resizeHandle
+            ? resizeAnchors(session.resizeHandle)
+            : undefined,
         )
     const next = normalizeEditorArea(snapped.area)
     setAlignmentGuides(snapped.guides)
@@ -239,10 +328,21 @@ export function Preview({
     const session = pointerSessionRef.current
     pointerSessionRef.current = null
     wrapperRef.current?.removeAttribute("data-dragging")
+    wrapperRef.current?.removeAttribute("data-transforming")
     setAlignmentGuides([])
     if (!session) return
     const finalArea = liveAreaRef.current
+    const finalRotation = liveRotationRef.current
     liveAreaRef.current = null
+    liveRotationRef.current = null
+    if (session.action === "rotate") {
+      if (commit && session.hasMoved && finalRotation !== null) {
+        onRotationChange?.(session.id, finalRotation)
+        return
+      }
+      applyLiveRotation(session, session.startRotationDeg)
+      return
+    }
     if (commit && session.hasMoved && finalArea) {
       onAreaChange?.(session.id, finalArea)
       return
@@ -272,6 +372,21 @@ export function Preview({
           selectedArea[3],
         ],
       ),
+    )
+  }
+
+  const rotateSelectionFromKeyboard = (
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+  ): void => {
+    if (!selectedLayerId || !onRotationChange) return
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+    event.preventDefault()
+    event.stopPropagation()
+    const direction = event.key === "ArrowLeft" ? -1 : 1
+    const step = event.shiftKey ? 15 : 1
+    onRotationChange(
+      selectedLayerId,
+      normalizeRotation(selectedRotation + direction * step),
     )
   }
 
@@ -333,9 +448,9 @@ export function Preview({
             data-testid="canvas-selection"
             data-layer={selectedLayerId}
             data-selection-layer={selectedLayerId}
-            role="button"
+            role="group"
             tabIndex={0}
-            aria-label={`Item ${selectedLabel ?? selectedLayerId} selecionado. Arraste para mover ou use as setas do teclado.`}
+            aria-label={`Item ${selectedLabel ?? selectedLayerId} selecionado. Arraste para mover, use as oito alças para redimensionar ou o ponto circular para girar.`}
             aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
             onKeyDown={nudgeSelection}
             style={{
@@ -343,10 +458,28 @@ export function Preview({
               top: `${selectedArea[1]}px`,
               width: `${selectedArea[2]}px`,
               height: `${selectedArea[3]}px`,
+              transform: selectedRotation === 0 ? undefined : `rotate(${selectedRotation}deg)`,
             }}
           >
             <span className="canvas-selection-label">{selectedLabel ?? selectedLayerId}</span>
-            <span className="canvas-resize-handle" data-resize-handle aria-hidden="true" />
+            {RESIZE_HANDLES.map((handle) => (
+              <span
+                key={handle}
+                className={`canvas-resize-handle canvas-resize-handle-${handle}`}
+                data-resize-handle={handle}
+                aria-hidden="true"
+              />
+            ))}
+            <span className="canvas-rotation-stem" aria-hidden="true" />
+            <button
+              type="button"
+              className="canvas-rotation-handle"
+              data-rotation-handle
+              aria-label={`Girar ${selectedLabel ?? selectedLayerId}. Rotação atual: ${selectedRotation} graus.`}
+              aria-keyshortcuts="ArrowLeft ArrowRight"
+              title="Arraste para girar. Segure Shift para encaixar em 15°."
+              onKeyDown={rotateSelectionFromKeyboard}
+            />
           </div>
         ) : null}
       </div>

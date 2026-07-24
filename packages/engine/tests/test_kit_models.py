@@ -164,11 +164,14 @@ def test_surface_catalog_is_typed_and_portable(kind):
 
 
 def test_layer_override_accepts_negative_position_and_oversized_dimensions():
-    override = LayerOverride(area=(-540, -120, 2160, 2700))
+    override = LayerOverride(area=(-540, -120, 2160, 2700), rotation_deg=-37.5)
     assert override.area == (-540, -120, 2160, 2700)
+    assert override.rotation_deg == -37.5
 
     with pytest.raises(Exception):
         LayerOverride(area=(-32769, 0, 100, 100))
+    with pytest.raises(Exception):
+        LayerOverride(rotation_deg=180.1)
 
 
 def test_schemas_exported(tmp_path):

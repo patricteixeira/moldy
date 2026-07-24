@@ -24,8 +24,12 @@ it("importBrandPackage envia um ZIP no campo package", async () => {
   const fetchFn = vi.fn(async () => jsonResponse(response))
   const client = createApiClient(fetchFn as unknown as typeof fetch)
   const files = [new File(["%PDF"], "manual.pdf"), new File(["<svg/>"], "logo.svg")]
-  const result = await client.importBrandPackage(files)
+  const progress: Array<{ phase: string; percent?: number }> = []
+  const result = await client.importBrandPackage(files, (value) => progress.push(value))
   expect(result).toEqual(response)
+  expect(progress[0]).toEqual({ phase: "packaging", percent: 0 })
+  expect(progress.at(-1)).toEqual({ phase: "processing" })
+  expect(progress).toContainEqual({ phase: "packaging", percent: 100 })
   const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit]
   expect(url).toBe("/v1/brands/imports")
   expect(init.method).toBe("POST")

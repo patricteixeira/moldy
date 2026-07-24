@@ -118,6 +118,44 @@ class Storage:
                 temporary.unlink()
         return sha256
 
+    def put_file(self, source: Path) -> str:
+        """Publica um arquivo regular em streaming sem materializá-lo inteiro na RAM."""
+        source = Path(source)
+        if not self._is_regular_file(source):
+            raise ValueError("O blob de origem precisa ser um arquivo local regular.")
+        sha256 = self._digest_file(source)
+        if sha256 is None:
+            raise ValueError("Não foi possível ler o blob de origem.")
+        destination = self.path_for(sha256)
+        if self._has_safe_parent(destination) and self._valid_blob(destination, sha256):
+            return sha256
+
+        self._ensure_safe_parent(destination)
+        descriptor, raw_temporary = tempfile.mkstemp(
+            prefix=f".{sha256}.",
+            suffix=".tmp",
+            dir=destination.parent,
+        )
+        temporary = Path(raw_temporary)
+        copied_digest = hashlib.sha256()
+        try:
+            with source.open("rb") as input_handle, os.fdopen(descriptor, "wb") as output_handle:
+                while chunk := input_handle.read(_CHUNK_SIZE):
+                    copied_digest.update(chunk)
+                    output_handle.write(chunk)
+                output_handle.flush()
+                os.fsync(output_handle.fileno())
+            if copied_digest.hexdigest() != sha256:
+                raise ValueError("O blob de origem mudou durante a publicação.")
+            if not self._has_safe_parent(destination):
+                raise ValueError("A hierarquia do storage contém um link não permitido.")
+            if not self._valid_blob(destination, sha256):
+                os.replace(temporary, destination)
+        finally:
+            with suppress(OSError):
+                temporary.unlink()
+        return sha256
+
     def has(self, sha256: str) -> bool:
         """Informa se um hash válido já está materializado como arquivo regular."""
         if not _SHA256_RE.fullmatch(sha256):

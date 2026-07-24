@@ -229,6 +229,7 @@ export type SlotValue =
 
 export interface LayerOverride {
   area?: [number, number, number, number] | null;
+  rotationDeg?: number | null;
   opacity?: number | null;
   hidden?: boolean;
   zIndex?: number | null;

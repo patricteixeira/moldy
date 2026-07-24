@@ -33,6 +33,8 @@ const MAX_Z_INDEX = 20;
 const MAX_STROKE_WIDTH_PX = 20;
 const MAX_LAYER_SPACING_PX = 256;
 const MAX_EDITOR_AREA_PX = 32_768;
+const MIN_LAYER_ROTATION_DEG = -180;
+const MAX_LAYER_ROTATION_DEG = 180;
 const MAX_SCENE_GROUPS = 64;
 const SURFACE_KIND_SET = new Set<string>(SURFACE_KINDS);
 const MIN_LETTER_SPACING_EM = -0.1;
@@ -1084,6 +1086,7 @@ function validateLayerOverride(
     override,
     [
       "area",
+      "rotationDeg",
       "opacity",
       "hidden",
       "zIndex",
@@ -1108,6 +1111,14 @@ function validateLayerOverride(
     override[name] !== undefined && override[name] !== null;
 
   if (present("area")) validateEditorArea(override.area, `${field}.area`);
+  if (present("rotationDeg")) {
+    boundedNumber(
+      override.rotationDeg,
+      `${field}.rotationDeg`,
+      MIN_LAYER_ROTATION_DEG,
+      MAX_LAYER_ROTATION_DEG,
+    );
+  }
   if (present("opacity")) boundedNumber(override.opacity, `${field}.opacity`, 0, 1);
   if (present("hidden") && typeof override.hidden !== "boolean") {
     invalid(`${field}.hidden deve ser booleano.`);

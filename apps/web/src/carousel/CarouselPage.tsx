@@ -14,6 +14,10 @@ import type {
 } from "../api/types"
 import { brandThemeStyle } from "../brandTheme"
 import {
+  creationBriefFromSearch,
+  creationBriefSummary,
+} from "../create/creationBrief"
+import {
   hasAutomaticLogoPair,
   logoAssetLabel,
   logoAssetTokens,
@@ -24,8 +28,9 @@ import { placeholderContent } from "../kit/placeholder"
 import { templateFamilyKey, templateFamilyLabel } from "../kit/templateFamilies"
 import {
   recommendationIsBrandLed,
-  recommendedTemplateLayouts,
+  recommendedTemplateGroups,
   type TemplateCatalogMode,
+  type TemplatePurpose,
 } from "../kit/templateRecommendations"
 
 const MIN_SLIDES = 3
@@ -62,6 +67,18 @@ function roleFor(index: number, total: number): "Capa" | "Conteúdo" | "Fechamen
   return "Conteúdo"
 }
 
+function purposeFor(index: number, total: number): TemplatePurpose {
+  if (index === 0) return "cover"
+  if (index === total - 1) return "closing"
+  return "content"
+}
+
+function purposeLabel(purpose: TemplatePurpose): string {
+  if (purpose === "cover") return "capa"
+  if (purpose === "closing") return "fechamento"
+  return "corpo"
+}
+
 function resizeSlides(current: CarouselSlideInput[], count: number): CarouselSlideInput[] {
   const cover = current[0] ?? emptySlide()
   const closing = current.at(-1) ?? emptySlide()
@@ -75,6 +92,18 @@ function resizeSlides(current: CarouselSlideInput[], count: number): CarouselSli
 
 function compatibleLayouts(layouts: LayoutSpec[], profile: CarouselProfile): LayoutSpec[] {
   return layouts.filter((layout) => layout.profile === profile)
+}
+
+function availableCarouselProfile(
+  layouts: LayoutSpec[],
+  preferredProfile: CarouselProfile,
+): CarouselProfile {
+  if (compatibleLayouts(layouts, preferredProfile).length > 0) return preferredProfile
+  const fallbackProfile: CarouselProfile =
+    preferredProfile === "post-4x5" ? "post-1x1" : "post-4x5"
+  return compatibleLayouts(layouts, fallbackProfile).length > 0
+    ? fallbackProfile
+    : preferredProfile
 }
 
 function baseLayouts(layouts: LayoutSpec[]): LayoutSpec[] {
@@ -231,11 +260,17 @@ export function CarouselPage(): JSX.Element {
   const { revisionId } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedCarouselId = searchParams.get("carouselId")
+  const creationBrief = creationBriefFromSearch(searchParams)
+  const requestedProfile =
+    creationBrief.profile === "post-1x1" || creationBrief.profile === "post-4x5"
+      ? creationBrief.profile
+      : "post-4x5"
+  const briefSummary = creationBriefSummary(creationBrief)
   const api = useApi()
   const [brandIr, setBrandIr] = useState<BrandIr | null>(null)
   const [layouts, setLayouts] = useState<LayoutSpec[]>([])
   const [name, setName] = useState("")
-  const [profile, setProfile] = useState<CarouselProfile>("post-4x5")
+  const [profile, setProfile] = useState<CarouselProfile>(requestedProfile)
   const [slides, setSlides] = useState<CarouselSlideInput[]>(() => initialSlides(5))
   const [activeIndex, setActiveIndex] = useState(0)
   const [signature, setSignature] = useState<CarouselSignature>({
@@ -271,17 +306,21 @@ export function CarouselPage(): JSX.Element {
         if (savedCarousel && savedCarousel.brandRevisionId !== revisionId) {
           throw new Error("Este carrossel não pertence à revisão de marca aberta.")
         }
+        const availableProfile = savedCarousel
+          ? savedCarousel.profile
+          : availableCarouselProfile(kit, requestedProfile)
         setBrandIr(result)
         setLayouts(kit)
         if (savedCarousel) {
           setCarousel(savedCarousel)
           setName(savedCarousel.name)
-          setProfile(savedCarousel.profile)
+          setProfile(availableProfile)
           setSignature(savedCarousel.signature)
           setSlides(savedCarousel.slides.map((slide) => slide.source))
           setActiveIndex(0)
         } else {
-          setSlides((current) => withCompatibleLayouts(current, kit, profile))
+          setProfile(availableProfile)
+          setSlides((current) => withCompatibleLayouts(current, kit, availableProfile))
         }
       })
       .catch((reason: unknown) => {
@@ -297,18 +336,49 @@ export function CarouselPage(): JSX.Element {
     return () => {
       active = false
     }
-  }, [api, profile, requestedCarouselId, revisionId])
+  }, [api, requestedCarouselId, requestedProfile, revisionId])
 
   const activeSlide = slides[activeIndex]
   const activeRole = roleFor(activeIndex, slides.length)
+  const activePurpose = purposeFor(activeIndex, slides.length)
   const formatLayouts = useMemo(
     () => compatibleLayouts(layouts, profile),
     [layouts, profile],
   )
-  const recommendedFormatLayouts = useMemo(
-    () => recommendedTemplateLayouts(formatLayouts),
-    [formatLayouts],
+  const portraitAvailable = useMemo(
+    () => compatibleLayouts(layouts, "post-4x5").length > 0,
+    [layouts],
   )
+  const squareAvailable = useMemo(
+    () => compatibleLayouts(layouts, "post-1x1").length > 0,
+    [layouts],
+  )
+  const briefFormatUnavailable =
+    Boolean(creationBrief.profile) &&
+    (creationBrief.profile === "story-9x16" ||
+      (creationBrief.profile === "post-4x5" && !portraitAvailable) ||
+      (creationBrief.profile === "post-1x1" && !squareAvailable)) &&
+    formatLayouts.length > 0
+  const recommendationGroups = useMemo(
+    () =>
+      recommendedTemplateGroups(formatLayouts, 3, {
+        objective: creationBrief.objective,
+        action: creationBrief.action,
+        visualPreference: creationBrief.visualPreference,
+      }),
+    [
+      creationBrief.action,
+      creationBrief.objective,
+      creationBrief.visualPreference,
+      formatLayouts,
+    ],
+  )
+  const recommendedFormatLayouts = useMemo(
+    () =>
+      recommendationGroups.find((group) => group.purpose === activePurpose)?.layouts ?? [],
+    [activePurpose, recommendationGroups],
+  )
+  const activePurposeLabel = purposeLabel(activePurpose)
   const brandLedRecommendations = recommendationIsBrandLed(recommendedFormatLayouts)
   const visibleLayouts = useMemo(
     () => {
@@ -541,16 +611,28 @@ export function CarouselPage(): JSX.Element {
     >
       <header className="carousel-heading" data-motion-enter>
         <div>
-          <p className="product-kicker">Uma história, slide por slide</p>
-          <h1>Modo Carrossel</h1>
-          <p>
-            Você escolhe a quantidade. O Molda organiza a capa, dá mais espaço ao conteúdo e
-            fecha a sequência com intenção.
-          </p>
+          <p className="product-kicker">Crie uma sequência</p>
+          <h1>Crie um carrossel.</h1>
+          <p>Defina a quantidade, escreva cada slide e escolha os modelos.</p>
+          {briefSummary ? <p className="creation-brief-summary">{briefSummary}</p> : null}
+          {briefFormatUnavailable ? (
+            <p className="creation-format-notice" role="status">
+              O tamanho escolhido não tem modelos nesta marca. Abrimos o carrossel em{" "}
+              {profile === "post-4x5" ? "4:5" : "1:1"}, que está disponível.
+            </p>
+          ) : null}
         </div>
-        <Link className="text-action" to={`/marcas/${encodeURIComponent(revisionId)}/kit`}>
-          Voltar ao kit
-        </Link>
+        <div className="carousel-heading-actions">
+          <Link
+            className="text-action"
+            to={`/marcas/${encodeURIComponent(revisionId)}/criar`}
+          >
+            Mudar respostas
+          </Link>
+          <Link className="text-action" to={`/marcas/${encodeURIComponent(revisionId)}/kit`}>
+            Voltar aos modelos
+          </Link>
+        </div>
       </header>
 
       <section className="carousel-setup" aria-labelledby="carousel-setup-title">
@@ -567,6 +649,7 @@ export function CarouselPage(): JSX.Element {
           <label>
             <span>Nome do carrossel</span>
             <input
+              name="carousel-name"
               value={name}
               maxLength={160}
               autoComplete="off"
@@ -577,6 +660,7 @@ export function CarouselPage(): JSX.Element {
           <label>
             <span>Quantidade de slides</span>
             <select
+              name="carousel-slide-count"
               value={slides.length}
               onChange={(event) => {
                 const count = Number(event.currentTarget.value)
@@ -597,6 +681,7 @@ export function CarouselPage(): JSX.Element {
           <label>
             <span>Formato de todos os arquivos</span>
             <select
+              name="carousel-profile"
               value={profile}
               onChange={(event) => {
                 const nextProfile = event.currentTarget.value as CarouselProfile
@@ -606,19 +691,25 @@ export function CarouselPage(): JSX.Element {
                 setCarousel(null)
               }}
             >
-              <option value="post-4x5">Retrato 4:5 · 1080 × 1350</option>
-              <option value="post-1x1">Quadrado 1:1 · 1080 × 1080</option>
+              <option value="post-4x5" disabled={layouts.length > 0 && !portraitAvailable}>
+                Retrato 4:5 · 1080 × 1350
+              </option>
+              <option value="post-1x1" disabled={layouts.length > 0 && !squareAvailable}>
+                Quadrado 1:1 · 1080 × 1080
+              </option>
             </select>
           </label>
         </div>
 
         <fieldset className="carousel-signature">
           <legend>Assinatura repetida</legend>
-          <p>Use @perfil, site, autoria ou uma frase curta. Escolha onde ela aparece.</p>
+          <p>Use @perfil, site ou uma frase curta. Escolha onde ela aparece.</p>
           <input
+            name="carousel-signature"
             aria-label="Texto da assinatura"
             value={signature.text}
             maxLength={80}
+            autoComplete="off"
             onChange={(event) => {
               const text = event.currentTarget.value
               setSignature((current) => ({ ...current, text }))
@@ -683,15 +774,15 @@ export function CarouselPage(): JSX.Element {
                 <p className="product-kicker">Composição do slide</p>
                 <h3 id="carousel-template-title">
                   {catalogMode === "recommended"
-                    ? "Deixe o conteúdo escolher a composição"
-                    : "Escolha qualquer modelo do kit"}
+                    ? `Escolha um modelo de ${activePurposeLabel}`
+                    : "Escolha qualquer modelo disponível"}
                 </h3>
                 <p>
                   {catalogMode === "recommended"
                     ? brandLedRecommendations
-                      ? "No modo inteligente, o Molda cruza a linguagem do manual com o papel e o conteúdo de cada slide. Você ainda pode assumir qualquer escolha."
-                      : "No modo inteligente, o Molda monta uma sequência variada e honesta com os sinais disponíveis. Você ainda pode escolher manualmente."
-                    : `${formatLayouts.length} modelos compatíveis com este formato. A escolha vale para o slide atual; você também pode aplicar a família inteira à sequência.`}
+                      ? `Estas ${recommendedFormatLayouts.length} opções combinam a função de ${activePurposeLabel} com os dados da marca.`
+                      : `Estas ${recommendedFormatLayouts.length} opções funcionam como ${activePurposeLabel}.`
+                    : `${formatLayouts.length} modelos neste formato. A escolha vale para o slide atual.`}
                 </p>
               </div>
               <div className="carousel-template-controls">
@@ -715,13 +806,14 @@ export function CarouselPage(): JSX.Element {
                 </div>
                 {catalogMode === "all" ? (
                   <label>
-                    <span>Família</span>
+                    <span>Estrutura</span>
                     <select
-                      aria-label="Família de templates"
+                      name="carousel-template-family"
+                      aria-label="Estrutura dos modelos"
                       value={familyFilter}
                       onChange={(event) => setFamilyFilter(event.currentTarget.value)}
                     >
-                      <option value="all">Todas as famílias</option>
+                      <option value="all">Todas as estruturas</option>
                       {templateFamilies.map((family) => (
                         <option key={family} value={family}>
                           {templateFamilyLabel(family)}
@@ -735,14 +827,14 @@ export function CarouselPage(): JSX.Element {
             <button
               type="button"
               className="carousel-auto-choice"
-              aria-label="Usar composição inteligente"
+              aria-label="Usar escolha automática"
               aria-pressed={!activeSlide.layoutId}
               data-active={!activeSlide.layoutId || undefined}
               onClick={() => updateSlide({ layoutId: null })}
             >
               <span className="carousel-auto-copy">
-                <small>Direção automática · slide {String(activeIndex + 1).padStart(2, "0")}</small>
-                <strong>Composição inteligente</strong>
+                <small>Seleção automática · slide {String(activeIndex + 1).padStart(2, "0")}</small>
+                <strong>Escolha automática</strong>
                 <span>
                   Considera {activeRole.toLocaleLowerCase("pt-BR")}, volume de texto, números,
                   etapas, ação e imagem. Sem foto, não escolhe modelos fotográficos.
@@ -849,7 +941,7 @@ export function CarouselPage(): JSX.Element {
             ) : null}
             <div className="carousel-template-actions">
               <p>
-                Selecionado: <strong>{activeLayout?.namePt ?? "Composição inteligente"}</strong>
+                Selecionado: <strong>{activeLayout?.namePt ?? "Escolha automática"}</strong>
               </p>
               <button
                 type="button"
@@ -857,7 +949,7 @@ export function CarouselPage(): JSX.Element {
                 disabled={!activeLayout}
                 onClick={applyFamilyToSequence}
               >
-                Aplicar esta família aos {slides.length} slides
+                Aplicar esta estrutura aos {slides.length} slides
               </button>
             </div>
             {activeLayout === null || activeImageSlots.length > 0 ? (
@@ -867,6 +959,7 @@ export function CarouselPage(): JSX.Element {
                     Imagem deste slide {activeNeedsImage ? "· necessária" : "· opcional"}
                   </span>
                   <input
+                    name={`carousel-image-${activeIndex + 1}`}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     disabled={uploadingImage}
@@ -900,7 +993,7 @@ export function CarouselPage(): JSX.Element {
             <div className="carousel-appearance-heading">
               <div>
                 <h3 id="carousel-appearance-title">Aparência deste slide</h3>
-                <p>Fundo, textos e logo podem mudar sem perder a paleta da marca.</p>
+                <p>Altere o fundo, os textos e o logo usando as opções da marca.</p>
               </div>
               <span>{activeRole}</span>
             </div>
@@ -1000,6 +1093,7 @@ export function CarouselPage(): JSX.Element {
                   <span>Versão da marca</span>
                   <select
                     id="carousel-logo-asset"
+                    name="carousel-logo-asset"
                     value={activeSlide.logoAssetToken ?? ""}
                     onChange={(event) =>
                       updateSlide({ logoAssetToken: event.currentTarget.value || null })
@@ -1044,8 +1138,10 @@ export function CarouselPage(): JSX.Element {
           <label>
             <span>Contexto curto <small>(opcional)</small></span>
             <input
+              name={`carousel-kicker-${activeIndex + 1}`}
               value={activeSlide.kicker}
               maxLength={80}
+              autoComplete="off"
               onChange={(event) => updateSlide({ kicker: event.currentTarget.value })}
               placeholder={activeRole === "Conteúdo" ? "Ex.: Princípio 01" : "Ex.: Guia visual"}
             />
@@ -1053,16 +1149,18 @@ export function CarouselPage(): JSX.Element {
           <label>
             <span>{activeRole === "Fechamento" ? "Mensagem final" : "Título principal"}</span>
             <textarea
+              name={`carousel-headline-${activeIndex + 1}`}
               value={activeSlide.headline}
               maxLength={180}
               rows={3}
+              autoComplete="off"
               onChange={(event) => updateSlide({ headline: event.currentTarget.value })}
               placeholder={
                 activeRole === "Capa"
-                  ? "A ideia que abre a história"
+                  ? "Escreva o assunto principal"
                   : activeRole === "Fechamento"
-                    ? "A ideia que deve permanecer"
-                    : "Uma ideia clara para este slide"
+                    ? "Escreva a mensagem final"
+                    : "Escreva o título deste slide"
               }
             />
           </label>
@@ -1075,7 +1173,7 @@ export function CarouselPage(): JSX.Element {
                   <small>
                     {activeRole === "Capa"
                       ? " A capa usa no máximo um apoio curto."
-                      : " Separe ideias para criar ritmo e hierarquia."}
+                      : " Escreva uma ideia em cada bloco."}
                   </small>
                 </span>
                 <button
@@ -1094,11 +1192,13 @@ export function CarouselPage(): JSX.Element {
                   <label>
                     <span>Bloco {index + 1}</span>
                     <textarea
+                      name={`carousel-block-${activeIndex + 1}-${index + 1}`}
                       value={block}
                       maxLength={520}
                       rows={4}
+                      autoComplete="off"
                       onChange={(event) => updateTextBlock(index, event.currentTarget.value)}
-                      placeholder="Escreva uma ideia completa — não precisa conhecer termos de design."
+                      placeholder="Escreva uma ideia completa para este slide."
                     />
                   </label>
                   <button
@@ -1115,8 +1215,10 @@ export function CarouselPage(): JSX.Element {
             <label>
               <span>Próximo passo <small>(opcional)</small></span>
               <input
+                name={`carousel-cta-${activeIndex + 1}`}
                 value={activeSlide.cta}
                 maxLength={240}
+                autoComplete="off"
                 onChange={(event) => updateSlide({ cta: event.currentTarget.value })}
                 placeholder="Ex.: Salve para consultar depois"
               />

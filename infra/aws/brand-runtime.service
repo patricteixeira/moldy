@@ -1,0 +1,21 @@
+[Unit]
+Description=Brand Runtime test application
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/opt/brand-runtime/current/docker-compose.yml
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/brand-runtime/current
+Environment=BRANDRT_PRIVATE_TEMPLATE_HOST_DIR=/opt/brand-runtime/private/templates
+Environment=BRANDRT_PRIVATE_FONT_HOST_DIR=/opt/brand-runtime/private/fonts
+Environment=VITE_SYNAPSIS_FONT_BASE_URL=/fonts/synapsis
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f infra/hosting/compose.hosted-assets.yml up -d --wait --wait-timeout 900
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f infra/hosting/compose.hosted-assets.yml stop
+RemainAfterExit=yes
+TimeoutStartSec=1200
+TimeoutStopSec=180
+
+[Install]
+WantedBy=multi-user.target

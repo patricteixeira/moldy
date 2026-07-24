@@ -31,7 +31,7 @@ function validateOutput(
   )
 }
 
-test("walking skeleton v0.2: instalar → kit → editar → carrossel → exportar", async ({
+test("walking skeleton v0.2: configurar → escolher → editar → exportar", async ({
   page,
 }) => {
   await page.goto("/")
@@ -43,23 +43,6 @@ test("walking skeleton v0.2: instalar → kit → editar → carrossel → expor
     "3 arquivos escolhidos",
   )
   await page.getByTestId("wizard-enviar").click()
-
-  await expect(page.getByTestId("wizard-question")).toContainText(
-    "Como é a sua marca?",
-  )
-  await page
-    .getByLabel("O que a marca entrega às pessoas")
-    .fill("Uma marca ousada e dinâmica que transforma sistemas em autonomia.")
-  await page
-    .getByLabel("Que impressão a marca deve deixar")
-    .fill("Geométrica, precisa, técnica e confiável.")
-  await page
-    .getByLabel("Como a marca conversa com as pessoas")
-    .fill("Direta, clara e acessível.")
-  await page
-    .getByLabel("O que nunca deve aparecer na marca")
-    .fill("Urgência artificial, exagero e promessas vazias.")
-  await page.getByTestId("wizard-confirmar").click()
 
   for (let index = 0; index < 8; index += 1) {
     const visible = await page
@@ -75,18 +58,28 @@ test("walking skeleton v0.2: instalar → kit → editar → carrossel → expor
   await page.getByTestId("wizard-brand-name").fill("ACME")
   await page.getByTestId("wizard-publicar").click()
 
-  await expect(page).toHaveURL(/\/marcas\/brandrev_[0-9a-f]+\/kit/)
-  await expect(page.getByTestId("kit-card")).toHaveCount(8)
+  await expect(page).toHaveURL(/\/marcas\/brandrev_[0-9a-f]+\/criar/)
+  await page.getByRole("radio", { name: /Explicar ou ensinar/ }).check()
+  await page.getByRole("radio", { name: /Peça individual/ }).check()
+  await page.getByRole("button", { name: "Escolher formato" }).click()
+  await page.getByRole("button", { name: "Definir conteúdo" }).click()
+  await page.getByRole("button", { name: "Ver modelos" }).click()
+
+  await expect(page).toHaveURL(/\/marcas\/brandrev_[0-9a-f]+\/kit\?/)
+  await expect.poll(async () => page.getByTestId("kit-card").count()).toBeGreaterThanOrEqual(8)
+  await expect(
+    page.locator(
+      '[data-testid="kit-card"][data-layout-id="ritmo-editorial-closing-post-4x5"]',
+    ),
+  ).toBeVisible()
   const kitUrl = page.url()
+  const kitBaseUrl = kitUrl.split("?")[0]
 
   await page.getByRole("button", { name: /Todos os modelos/ }).click()
   await expect.poll(async () => page.getByTestId("kit-card").count()).toBeGreaterThan(13)
 
-  await page.locator('[data-testid="kit-card"][data-layout-id="quote-post-1x1"]').click()
-  await expect(page.getByRole("heading", { name: "Escala sem contenção" })).toBeVisible()
-  await page.getByRole("button", { name: "Aplicar esta sugestão" }).click()
-  await expect(page.getByText("Ajustar Grade técnica")).toBeVisible()
-  await expect(page.locator('.preview-canvas [data-surface-kind="technical-grid"]')).toBeVisible()
+  await page.locator('[data-testid="kit-card"][data-layout-id="quote-post-4x5"]').click()
+  await expect(page.getByRole("heading", { name: "Ainda não há uma sugestão" })).toBeVisible()
   await page.getByRole("button", { name: "Ver todas as 20 texturas" }).click()
   await page
     .getByTestId("surface-option")
@@ -151,7 +144,7 @@ test("walking skeleton v0.2: instalar → kit → editar → carrossel → expor
   await pngLink.click()
   const pngPath = path.join(FIX, "out-post.png")
   await (await pngDownload).saveAs(pngPath)
-  validateOutput("png", pngPath)
+  validateOutput("png-4x5", pngPath)
 
   await page.getByTestId("exportar-pptx").click()
   await expect(page.getByTestId("export-status")).toContainText("PPTX pronto", {
@@ -163,16 +156,16 @@ test("walking skeleton v0.2: instalar → kit → editar → carrossel → expor
   await pptxLink.click()
   const pptxPath = path.join(FIX, "out-post.pptx")
   await (await pptxDownload).saveAs(pptxPath)
-  validateOutput("pptx", pptxPath)
+  validateOutput("pptx-4x5", pptxPath)
 
-  await expect(page.getByText("Confira o arquivo que voltou")).toBeVisible()
+  await expect(page.getByText("Confira o arquivo editado")).toBeVisible()
   await page.getByTestId("roundtrip-file").setInputFiles(pptxPath)
   await page.getByTestId("roundtrip-analyze").click()
-  await expect(page.getByText("Tudo no lugar. O arquivo voltou sem desvios.")).toBeVisible({
+  await expect(page.getByText("Nenhum problema encontrado. O arquivo pode ser usado.")).toBeVisible({
     timeout: 120_000,
   })
 
-  await page.goto(kitUrl)
+  await page.goto(kitBaseUrl)
   await page.getByRole("button", { name: /Todos os modelos/ }).click()
   await page.locator('[data-testid="kit-card"][data-layout-id="one-pager-doc-a4"]').click()
   await page.getByTestId("slot-input-title").fill("Relatório do mês")
@@ -201,9 +194,9 @@ test("walking skeleton v0.2: instalar → kit → editar → carrossel → expor
   await (await docxDownload).saveAs(docxPath)
   validateOutput("docx", docxPath)
 
-  await page.goto(kitUrl)
-  await page.getByRole("link", { name: /Modo Carrossel/ }).click()
-  await expect(page.getByRole("heading", { name: "Modo Carrossel" })).toBeVisible()
+  await page.goto(kitBaseUrl)
+  await page.getByRole("link", { name: "Carrossel" }).click()
+  await expect(page.getByRole("heading", { name: "Crie um carrossel." })).toBeVisible()
   await page.getByLabel("Nome do carrossel").fill("Autonomia em três atos")
   await page.getByRole("combobox", { name: /Quantidade de slides/ }).selectOption("3")
   await page.getByLabel("Texto da assinatura").fill("@acme")

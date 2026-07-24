@@ -1883,27 +1883,6 @@ textarea:disabled {
   box-shadow: 0 0 0 5px #fff;
 }
 
-.canvas-selection::before,
-.canvas-selection::after {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border: 2px solid #fff;
-  outline: 1px solid #000;
-  background: #000;
-  content: "";
-}
-
-.canvas-selection::before {
-  top: -7px;
-  left: -7px;
-}
-
-.canvas-selection::after {
-  top: -7px;
-  right: -7px;
-}
-
 .canvas-selection-label {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -1920,14 +1899,104 @@ textarea:disabled {
 
 .canvas-resize-handle {
   position: absolute;
-  right: -9px;
-  bottom: -9px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 3px solid #fff;
   outline: 1px solid #000;
   background: #000;
+}
+
+.canvas-resize-handle-nw {
+  top: 0;
+  left: 0;
   cursor: nwse-resize;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-resize-handle-n {
+  top: 0;
+  left: 50%;
+  cursor: ns-resize;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-resize-handle-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+  transform: translate(50%, -50%);
+}
+
+.canvas-resize-handle-e {
+  top: 50%;
+  right: 0;
+  cursor: ew-resize;
+  transform: translate(50%, -50%);
+}
+
+.canvas-resize-handle-se {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+  transform: translate(50%, 50%);
+}
+
+.canvas-resize-handle-s {
+  bottom: 0;
+  left: 50%;
+  cursor: ns-resize;
+  transform: translate(-50%, 50%);
+}
+
+.canvas-resize-handle-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+  transform: translate(-50%, 50%);
+}
+
+.canvas-resize-handle-w {
+  top: 50%;
+  left: 0;
+  cursor: ew-resize;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-rotation-stem {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  width: 0;
+  height: 44px;
+  border-left: 2px solid #000;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.canvas-rotation-handle {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  outline: 1px solid #000;
+  padding: 0;
+  background: #000;
+  cursor: grab;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-rotation-handle:focus-visible {
+  outline: 3px solid #000;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px #fff;
+}
+
+.preview-canvas[data-transforming="rotate"] .canvas-rotation-handle {
+  cursor: grabbing;
 }
 
 .inspector-empty {
@@ -2241,6 +2310,44 @@ textarea:disabled {
   text-align: center;
 }
 
+.rotation-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+  border-top: var(--m-rule-solid);
+  padding-top: 0.75rem;
+}
+
+.rotation-field > small {
+  grid-column: 1 / -1;
+  color: var(--m-graphite);
+  font-family: var(--m-mono);
+  font-size: 0.62rem;
+  line-height: 1.45;
+}
+
+.rotation-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: var(--m-rule-solid);
+  background: var(--m-sheet);
+}
+
+.rotation-input input {
+  width: 100%;
+  border: 0 !important;
+  text-align: right;
+}
+
+.rotation-input > span {
+  padding-right: 0.55rem;
+  color: var(--m-graphite);
+  font-family: var(--m-mono);
+  font-size: 0.72rem;
+}
+
 .segmented-control {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -2304,6 +2411,14 @@ textarea:disabled {
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--brand-primary, var(--m-ink)) 4%, transparent), transparent 48%),
     var(--m-paper);
+}
+
+.canvas-global-control {
+  border-top: 2px solid var(--m-ink);
+}
+
+.canvas-global-control .panel-kicker {
+  margin: 0 0 0.15rem;
 }
 
 .canvas-background-heading {
@@ -2376,20 +2491,12 @@ textarea:disabled {
   cursor: grabbing;
 }
 
-.canvas-appearance-group {
+.item-color-control {
   display: grid;
   gap: 0.65rem;
-  border-top: var(--m-rule-solid);
-  padding-top: 0.75rem;
-}
-
-.canvas-appearance-group.logo-binding-panel label {
-  display: grid;
-  gap: 0.4rem;
-}
-
-.canvas-appearance-group.logo-binding-panel select {
-  width: 100%;
+  border: var(--m-rule-solid);
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--m-sheet) 58%, var(--m-paper));
 }
 
 .canvas-logo-quick {

@@ -8,7 +8,7 @@ it("placeholder é determinístico, PT-BR e respeita maxChars", () => {
   const b = placeholderContent(layout, "brandrev_x")
   expect(a).toEqual(b)
   expect(a.layoutId).toBe(layout.id)
-  expect(a.values.headline).toEqual({ kind: "text", text: "Sua marca em movimento." })
+  expect(a.values.headline).toEqual({ kind: "text", text: "Novidade da Sua marca." })
   expect(a.values).not.toHaveProperty("logo")
   expect(a.addedSlots?.map((slot) => slot.id)).toEqual([
     "user-kicker-1",
@@ -20,7 +20,7 @@ it("placeholder é determinístico, PT-BR e respeita maxChars", () => {
   layout.slots[0].maxChars = 4
   expect(placeholderContent(layout, "brandrev_x").values.headline).toEqual({
     kind: "text",
-    text: "Sua…",
+    text: "Nov…",
   })
 })
 
@@ -32,15 +32,15 @@ it("slots de imagem usam o data URI placeholder", () => {
   expect((photo as { path: string }).path).toBe(PLACEHOLDER_IMAGE)
 })
 
-it("arquétipo editorial nasce com texto autoral e destaque válido", () => {
+it("arquétipo editorial nasce com instrução direta e destaque válido", () => {
   const content = placeholderContent(fakeEditorialLayout(), "brandrev_x")
 
   expect(content.values).toMatchObject({
-    kicker: { kind: "text", text: "AUTORIA NÃO É UM EFEITO." },
+    kicker: { kind: "text", text: "NOVA PEÇA" },
     headline: {
       kind: "text",
-      text: "É A COERÊNCIA ENTRE INTENÇÃO E FORMA.",
-      emphasis: "INTENÇÃO E FORMA",
+      text: "ESCREVA A MENSAGEM PRINCIPAL.",
+      emphasis: "MENSAGEM PRINCIPAL",
     },
     index: { kind: "text", text: "06" },
     signature: { kind: "text", text: "@suamarca" },
@@ -55,7 +55,7 @@ it("corte editorial remove destaque quando a palavra inteira não cabe", () => {
 
   expect(placeholderContent(layout, "brandrev_x").values.headline).toEqual({
     kind: "text",
-    text: "É A COERÊNC…",
+    text: "ESCREVA A M…",
   })
 })
 
@@ -73,5 +73,5 @@ it("template versionado preserva seu esqueleto sem adicionar assinatura e filete
   const content = placeholderContent(layout, "brandrev_x")
   expect(content.addedSlots).toEqual([])
   expect(content.addedLayers).toEqual([])
-  expect(content.values.headline).toEqual({ kind: "text", text: "Sua marca em movimento." })
+  expect(content.values.headline).toEqual({ kind: "text", text: "Novidade da Sua marca." })
 })

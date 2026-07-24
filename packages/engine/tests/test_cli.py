@@ -127,7 +127,31 @@ def test_engine_walking_skeleton(brand_package, tmp_path):
     assert result.stderr == ""
 
 
-def test_missing_required_exits_2(brand_package, tmp_path):
+def test_automatic_required_answers_compile_without_manual_values(brand_package, tmp_path):
+    draft_p = tmp_path / "draft.json"
+    runner.invoke(app, ["extract", str(brand_package), "--out", str(draft_p)])
+    answers_p = tmp_path / "answers.json"
+    answers_p.write_text(json.dumps({"values": {}}), encoding="utf-8")
+    output_p = tmp_path / "ir.json"
+    result = runner.invoke(
+        app,
+        [
+            "compile",
+            str(draft_p),
+            str(answers_p),
+            "--name",
+            "ACME",
+            "--out",
+            str(output_p),
+        ],
+    )
+    assert result.exit_code == 0
+    assert output_p.is_file()
+    assert result.stderr == ""
+
+
+def test_missing_required_logo_exits_2(brand_package, tmp_path):
+    (brand_package / "assets" / "logos" / "logo.svg").unlink()
     draft_p = tmp_path / "draft.json"
     runner.invoke(app, ["extract", str(brand_package), "--out", str(draft_p)])
     answers_p = tmp_path / "answers.json"
@@ -146,7 +170,7 @@ def test_missing_required_exits_2(brand_package, tmp_path):
     )
     assert result.exit_code == 2
     assert result.stdout == ""
-    assert "identity.expression" in result.stderr
+    assert "logo.primary" in result.stderr
 
 
 def test_schemas_exports_all_published_contracts(tmp_path):

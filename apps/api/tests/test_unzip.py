@@ -24,6 +24,15 @@ def test_unpacks_and_hashes(tmp_path):
     assert set(result.manifest) == {"manual.pdf", "assets/logos/logo.svg"}
 
 
+def test_unpacks_from_seekable_stream_without_copying_the_archive(tmp_path):
+    source = io.BytesIO(_zip({"manual.pdf": b"%PDF-1.4 fake"}))
+
+    result = safe_unpack(source, tmp_path / "pkg")
+
+    assert result.manifest["manual.pdf"] == hashlib.sha256(b"%PDF-1.4 fake").hexdigest()
+    assert source.closed is False
+
+
 def test_ignores_disallowed_extensions(tmp_path):
     data = _zip({"manual.pdf": b"x", "malware.exe": b"MZ"})
     result = safe_unpack(data, tmp_path / "pkg")

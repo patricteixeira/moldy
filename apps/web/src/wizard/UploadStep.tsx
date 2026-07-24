@@ -1,6 +1,11 @@
 import { type DragEvent, type FormEvent, useEffect, useRef, useState } from "react"
 import { useApi } from "../api/context"
-import type { Diagnostic, DraftQuestion, ImportResult } from "../api/types"
+import type {
+  BrandImportProgress,
+  Diagnostic,
+  DraftQuestion,
+  ImportResult,
+} from "../api/types"
 import { blockingRequiredQuestions } from "./state"
 
 interface IntakeIssues {
@@ -39,6 +44,7 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
   const api = useApi()
   const [files, setFiles] = useState<File[]>([])
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<BrandImportProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectionNotice, setSelectionNotice] = useState<string | null>(null)
   const [intakeIssues, setIntakeIssues] = useState<IntakeIssues | null>(null)
@@ -100,14 +106,17 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
     event.preventDefault()
     if (files.length === 0 || busy) return
     setBusy(true)
+    setProgress({ phase: "packaging", percent: 0 })
     setError(null)
     setIntakeIssues(null)
     const current = ++generation.current
     try {
-      const result = await api.importBrandPackage(files)
+      const result = await api.importBrandPackage(files, (nextProgress) => {
+        if (generation.current === current) setProgress(nextProgress)
+      })
       if (generation.current !== current) return
       const blockingQuestions = blockingRequiredQuestions(result.questions)
-      if (result.questions.length === 0 || blockingQuestions.length > 0) {
+      if (blockingQuestions.length > 0) {
         setIntakeIssues({
           blockingQuestions,
           diagnostics: uniqueDiagnostics(result.diagnostics),
@@ -124,12 +133,15 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
           : "Não foi possível ler os arquivos da marca.",
       )
     } finally {
-      if (generation.current === current) setBusy(false)
+      if (generation.current === current) {
+        setBusy(false)
+        setProgress(null)
+      }
     }
   }
 
   return (
-    <form className="upload-step" onSubmit={submit}>
+    <form className="upload-step" aria-busy={busy} onSubmit={submit}>
       <p className="intro-copy">
         Envie o manual, o logo, as fontes e outros arquivos da marca. Você pode adicionar mais
         arquivos depois.
@@ -217,6 +229,35 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
         </section>
       )}
       {selectionNotice && <p role="status">{selectionNotice}</p>}
+      {busy && progress && (
+        <section className="intake-progress" role="status" aria-live="polite" aria-atomic="true">
+          <div className="intake-progress-heading">
+            <span>Processamento</span>
+            <strong>
+              {progress.phase === "packaging"
+                ? `Preparando pacote · ${Math.round(progress.percent ?? 0)}%`
+                : "Enviando e analisando materiais"}
+            </strong>
+          </div>
+          <progress
+            aria-label={
+              progress.phase === "packaging"
+                ? "Progresso da preparação do pacote"
+                : "Envio e análise em andamento"
+            }
+            max={100}
+            value={progress.phase === "packaging" ? progress.percent : undefined}
+          />
+          <ol aria-label="Etapas do processamento">
+            <li data-state={progress.phase === "packaging" ? "active" : "done"}>
+              <span>01</span> Preparar pacote
+            </li>
+            <li data-state={progress.phase === "processing" ? "active" : "pending"}>
+              <span>02</span> Enviar e analisar
+            </li>
+          </ol>
+        </section>
+      )}
       {intakeIssues && (
         <section className="intake-issues" role="alert" aria-labelledby="intake-issues-title">
           <h2 id="intake-issues-title">Ainda faltam alguns arquivos.</h2>
@@ -242,7 +283,11 @@ export function UploadStep({ onDraft }: { onDraft(result: ImportResult): void })
       )}
       {error && <p role="alert">{error}</p>}
       <button data-testid="wizard-enviar" type="submit" disabled={files.length === 0 || busy}>
-        {busy ? "Lendo arquivos…" : "Usar estes arquivos"}
+        {busy
+          ? progress?.phase === "packaging"
+            ? `Preparando ${Math.round(progress.percent ?? 0)}%`
+            : "Analisando materiais…"
+          : "Usar estes arquivos"}
       </button>
     </form>
   )

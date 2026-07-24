@@ -45,7 +45,7 @@ function validSelection(question: DraftQuestion, value: unknown): boolean {
 function instructionForQuestion(question: DraftQuestion): string {
   if (question.kind === "review-identity") {
     return question.candidates[0]?.evidence.length
-      ? "O Molda encontrou estas pistas no manual. Você só precisa conferir e corrigir o que estiver errado."
+      ? "O Molda encontrou estes dados no manual. Confira e corrija o que estiver errado."
       : "O manual não explicou estes pontos com clareza. Responda com palavras comuns; não é preciso conhecer termos de design."
   }
   if (question.kind === "pick-color") {

@@ -124,6 +124,10 @@ def test_dtcg_font_roles_do_not_leak_between_heading_and_body(tmp_path):
                         "family": {"$type": "fontFamily", "$value": "General Sans"},
                         "weight": {"$type": "fontWeight", "$value": 400},
                     },
+                    "accent": {
+                        "family": {"$type": "fontFamily", "$value": "IvyPresto Display"},
+                        "weight": {"$type": "fontWeight", "$value": 400},
+                    },
                 }
             }
         ),
@@ -135,6 +139,11 @@ def test_dtcg_font_roles_do_not_leak_between_heading_and_body(tmp_path):
 
     assert questions["font.heading"].candidates[0].value["family"] == "Clash Display"
     assert questions["font.body"].candidates[0].value["family"] == "General Sans"
+    assert "IvyPresto Display" not in {
+        candidate.value["family"]
+        for question_id in ("font.heading", "font.body")
+        for candidate in questions[question_id].candidates
+    }
 
 
 def test_deep_nesting_raises_no_recursion_error(tmp_path):

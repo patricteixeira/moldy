@@ -848,11 +848,23 @@ def compile_ir(
     timestamp = created_at if created_at is not None else datetime.now(timezone.utc)
     diagnostics = [item.model_copy(deep=True) for item in draft.diagnostics]
     identity_question = _question(draft, "identity.expression")
-    identity = (
-        _compile_identity(draft, resolved_answers.values["identity.expression"], timestamp)
-        if identity_question is not None
-        else None
-    )
+    identity_answer = resolved_answers.values.get("identity.expression")
+    explicit_identity_answer = "identity.expression" in answers.values
+    identity = None
+    if identity_question is not None and identity_answer is not None:
+        # A leitura editorial pertence à marca, não ao briefing de cada peça.
+        # Quando o manual oferece sinal, ele é preservado automaticamente. Um
+        # pacote que só traz cores/fontes não é forçado a inventar uma essência.
+        # Respostas explícitas continuam passando pelo guard estrito abaixo.
+        if explicit_identity_answer:
+            identity = _compile_identity(draft, identity_answer, timestamp)
+        else:
+            try:
+                parsed_identity = IdentityDraftValue.model_validate(identity_answer)
+            except ValidationError as exc:
+                raise CompileError("A leitura da identidade possui campos inválidos.") from exc
+            if parsed_identity.essence.strip():
+                identity = _compile_identity(draft, identity_answer, timestamp)
     creative_direction = derive_creative_direction(identity) if identity is not None else None
     if identity is not None and creative_direction is None:
         diagnostics.append(

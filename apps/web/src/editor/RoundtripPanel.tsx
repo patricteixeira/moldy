@@ -161,7 +161,7 @@ export function RoundtripPanel({
     setAnalysisJobId(null)
     setFixed(null)
     setPending(true)
-    setStatus("Lendo o arquivo que voltou…")
+    setStatus("Lendo o arquivo editado…")
     try {
       const { jobId } = await withDeadline(client.requestRoundtrip(exportJobId, file))
       if (controller.signal.aborted) return
@@ -231,16 +231,16 @@ export function RoundtripPanel({
   return (
     <section className="roundtrip-panel" aria-labelledby="roundtrip-title">
       <header className="roundtrip-heading">
-        <h2 id="roundtrip-title">Confira o arquivo que voltou</h2>
+        <h2 id="roundtrip-title">Confira o arquivo editado</h2>
         <p>
-          Seu texto é preservado. A mesa de prova aponta apenas o que saiu do padrão da marca.
+          O Molda mantém seu texto e mostra o que saiu do padrão da marca.
         </p>
       </header>
 
       <ol className="roundtrip-steps" aria-label="Como trazer o arquivo de volta">
         <li><strong>Editar</strong><p>Abra o PPTX no Google Slides ou PowerPoint.</p></li>
         <li><strong>Salvar</strong><p>Baixe novamente como arquivo PowerPoint.</p></li>
-        <li><strong>Conferir</strong><p>Traga essa cópia para a mesa de prova.</p></li>
+        <li><strong>Conferir</strong><p>Envie a cópia editada aqui.</p></li>
       </ol>
 
       {!analysis ? (
@@ -249,6 +249,7 @@ export function RoundtripPanel({
           <input
             ref={fileInput}
             id="roundtrip-file"
+            name="roundtrip-file"
             data-testid="roundtrip-file"
             type="file"
             accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -298,7 +299,7 @@ export function RoundtripPanel({
               ))}
             </ul>
           ) : (
-            <p className="roundtrip-pass">Tudo no lugar. O arquivo voltou sem desvios.</p>
+            <p className="roundtrip-pass">Nenhum problema encontrado. O arquivo pode ser usado.</p>
           )}
 
           <div className="roundtrip-report-actions">

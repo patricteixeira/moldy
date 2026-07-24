@@ -42,13 +42,12 @@ def test_compile_reusa_marca_pelo_nome(client, imported, db):
     assert db.execute(select(func.count()).select_from(Brand)).scalar_one() == 1
 
 
-def test_compile_faltando_obrigatorios_422(client, imported):
+def test_compile_sem_briefing_operacional_usa_apenas_a_leitura_da_marca(client, imported):
     response = client.post(
         f"/v1/drafts/{imported['draftId']}/compile",
         json={"answers": {"values": {}}, "brandName": "ACME"},
     )
-    assert response.status_code == 422
-    assert "identity.expression" in response.json()["detail"]
+    assert response.status_code == 201, response.text
 
 
 def test_compile_draft_inexistente_404(client):

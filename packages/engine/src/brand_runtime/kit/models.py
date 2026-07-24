@@ -19,6 +19,7 @@ Area = tuple[NonNegativeInt, NonNegativeInt, PositiveInt, PositiveInt]
 EditorCoordinate = Annotated[int, Field(ge=-32768, le=32768)]
 EditorDimension = Annotated[int, Field(gt=0, le=32768)]
 EditorArea = tuple[EditorCoordinate, EditorCoordinate, EditorDimension, EditorDimension]
+LayerRotation = Annotated[float, Field(ge=-180.0, le=180.0, allow_inf_nan=False)]
 Resolution = tuple[PositiveInt, PositiveInt]
 Opacity = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 ZIndex = Annotated[int, Field(ge=0, le=20)]
@@ -430,6 +431,7 @@ class LayerOverride(CamelModel):
     """Ajustes autorais de uma instância sem alterar o layout publicado."""
 
     area: EditorArea | None = None
+    rotation_deg: LayerRotation | None = None
     opacity: Opacity | None = None
     hidden: bool = False
     z_index: ZIndex | None = None

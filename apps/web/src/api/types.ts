@@ -244,6 +244,7 @@ export type SlotValue =
 
 export interface LayerOverride {
   area?: [number, number, number, number] | null
+  rotationDeg?: number | null
   opacity?: number | null
   hidden?: boolean
   zIndex?: number | null
@@ -438,6 +439,11 @@ export interface ImportResult {
   ignoredEntries: string[]
 }
 
+export interface BrandImportProgress {
+  phase: "packaging" | "processing"
+  percent?: number
+}
+
 export type FontResolutionStatus =
   | "local-ready"
   | "vendor-hosted"
@@ -590,7 +596,10 @@ export interface AssetUpload {
 }
 
 export interface ApiClient {
-  importBrandPackage(files: File[]): Promise<ImportResult>
+  importBrandPackage(
+    files: File[],
+    onProgress?: (progress: BrandImportProgress) => void,
+  ): Promise<ImportResult>
   resolveDraftFont(
     draftId: string,
     questionId: "font.heading" | "font.body",

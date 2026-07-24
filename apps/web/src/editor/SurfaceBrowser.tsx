@@ -110,9 +110,9 @@ export function SurfaceBrowser({ brandIr, surface, disabled = false, onSurfaceCh
       </div>
       <p className="surface-browser-intro">
         {recommendsCleanBackground
-          ? "A leitura principal pede um fundo limpo. Estas são alternativas discretas, e todas as outras continuam disponíveis."
+          ? "Os arquivos da marca indicam um fundo sem textura. Você ainda pode escolher uma opção abaixo."
           : recommendations.length > 0
-            ? "Estas combinam mais com o que a marca diz ser. Você continua livre para usar qualquer outra."
+            ? "Estas opções correspondem melhor às cores e formas encontradas nos arquivos. Todas as outras continuam disponíveis."
           : "Ainda não há informação suficiente para recomendar uma textura. Todas continuam disponíveis."}
       </p>
 

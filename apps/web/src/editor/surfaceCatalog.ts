@@ -65,7 +65,7 @@ export const SURFACE_CATALOG: ReadonlyArray<SurfaceDefinition> = [
     kind: "scanlines",
     name: "Linhas de tela",
     family: "lines",
-    description: "Riscos horizontais finos com presença digital.",
+    description: "Riscos horizontais finos semelhantes às linhas de uma tela.",
     defaults: { opacity: 0.08, scalePx: 28, weightPx: 0.8, angleDeg: 0 },
   },
   {

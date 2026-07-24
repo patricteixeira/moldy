@@ -84,6 +84,32 @@ Creme sobre verde - fundos escuros
     assert declarations.dark_mode_evidence
 
 
+def test_extracts_compact_modes_ratios_and_motif_from_practical_manual(tmp_path):
+    declarations = extract_pdf_composition(
+        _manual(
+            tmp_path,
+            """MODO CLARO
+Padrão. Papel de fundo, âmbar como tinta, grafite pontual.
+MODO ESCURO
+Carvão de fundo, corpo em papel, âmbar como acento display.
+PROPORÇÃO & ACENTO
+Área 60/25/15 (papel/âmbar/grafite).
+MOTIVOS GRÁFICOS
+Ponto âmbar, fio 1px, diagonais 135º e arcos.
+""",
+        )
+    )
+
+    assert declarations.light_mode_evidence
+    assert declarations.dark_mode_evidence
+    assert [(item.role, item.ratio) for item in declarations.color_ratios] == [
+        ("primary", 0.15),
+        ("background", 0.6),
+        ("accent", 0.25),
+    ]
+    assert [item.kind for item in declarations.motifs] == ["diagonal-lines"]
+
+
 def test_does_not_infer_rules_from_incidental_visual_language(tmp_path):
     path = _manual(
         tmp_path,

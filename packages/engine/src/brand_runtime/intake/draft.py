@@ -72,6 +72,11 @@ _DEFAULT_BACKGROUND = "#FFFFFF"
 _DEFAULT_TEXT = "#1A1A1A"
 
 _HEAVY_MIN_WEIGHT = 600  # regras 6 e 7: divisor entre fonte de título e de corpo
+_FONT_ROLE_TERMS = {
+    "heading": {"heading", "title", "display"},
+    "body": {"body", "text", "reading", "paragraph"},
+}
+_OTHER_FONT_ROLE_TERMS = {"accent", "decorative", "editorial"}
 
 # Mesmas confianças dos extratores de cor correspondentes (svg_logo/raster_logo).
 _SVG_LOGO_CONFIDENCE = 0.95
@@ -273,20 +278,45 @@ def _dtcg_colors_for_role(dtcg: dict[str, Candidate], role: str) -> list[Candida
 
 def _dtcg_fonts_for_role(dtcg: dict[str, Candidate], role: str) -> list[Candidate]:
     """Respeita ``font.heading``/``font.body`` e compartilha só tokens não tipados."""
-    role_terms = {
-        "heading": {"heading", "title", "display"},
-        "body": {"body", "text", "reading", "paragraph"},
-    }
-    own = role_terms[role]
-    opposite = set().union(*(terms for name, terms in role_terms.items() if name != role))
+    own = _FONT_ROLE_TERMS[role]
+    opposite = set().union(*(terms for name, terms in _FONT_ROLE_TERMS.items() if name != role))
+    all_typed_terms = own | opposite | _OTHER_FONT_ROLE_TERMS
     selected: list[Candidate] = []
     for key, candidate in dtcg.items():
         if not key.startswith("font."):
             continue
         parts = _semantic_key_parts(key)
-        if parts & own or not parts & (own | opposite):
+        if parts & own or not parts & all_typed_terms:
             selected.append(candidate)
     return selected
+
+
+def _explicit_dtcg_fonts_for_role(dtcg: dict[str, Candidate], role: str) -> list[Candidate]:
+    """Seleciona apenas tokens que nomeiam inequivocamente um papel tipográfico."""
+    role_terms = _FONT_ROLE_TERMS[role]
+    return [
+        candidate
+        for key, candidate in dtcg.items()
+        if key.startswith("font.") and _semantic_key_parts(key) & role_terms
+    ]
+
+
+def _all_explicit_font_tokens_are_bound(
+    dtcg: dict[str, Candidate],
+    bound_by_original_id: dict[int, Candidate],
+) -> bool:
+    """Confirma que título e corpo têm intenção DTCG ligada a binários locais."""
+    for role in ("heading", "body"):
+        explicit = _explicit_dtcg_fonts_for_role(dtcg, role)
+        if not explicit:
+            return False
+        if any(
+            not isinstance(bound_by_original_id[id(candidate)].value, dict)
+            or not bound_by_original_id[id(candidate)].value.get("path")
+            for candidate in explicit
+        ):
+            return False
+    return True
 
 
 def _color_candidates(
@@ -697,13 +727,20 @@ def build_draft(
     dtcg_colors = [c for key, c in dtcg.items() if key.startswith("color.")]
     dtcg_fonts = [c for key, c in dtcg.items() if key.startswith("font.")]
 
-    colors = _color_candidates(pdfs, svg_logos, png_logos, dtcg_colors)
-    logo_colors = _color_candidates([], svg_logos, png_logos, [])
-    declared_colors = _declared_color_candidates(pdfs)
     dtcg_primary = _dtcg_colors_for_role(dtcg, "primary")
     dtcg_secondary = _dtcg_colors_for_role(dtcg, "secondary")
     dtcg_background = _dtcg_colors_for_role(dtcg, "background")
     dtcg_text = _dtcg_colors_for_role(dtcg, "text")
+    # Um pacote que declara todos os quatro papéis cromáticos já contém a
+    # decisão que os extratores visuais e textuais do PDF tentariam reconstruir.
+    # Entradas mínimas, sem essa cobertura, continuam usando o caminho completo.
+    has_complete_dtcg_palette = bool(
+        dtcg_primary and dtcg_secondary and dtcg_background and dtcg_text
+    )
+    color_pdfs = [] if has_complete_dtcg_palette else pdfs
+    colors = _color_candidates(color_pdfs, svg_logos, png_logos, dtcg_colors)
+    logo_colors = _color_candidates([], svg_logos, png_logos, [])
+    declared_colors = _declared_color_candidates(color_pdfs)
     # Quando o manual declara uma paleta em texto ou tokens, ela é a fronteira
     # autoritativa. Tintas vetoriais incidentais do próprio PDF (marcas de corte,
     # linhas técnicas e sombras) não devem reaparecer como cores da marca.
@@ -783,8 +820,12 @@ def build_draft(
     dtcg_body_fonts = [
         bound_by_original_id[id(candidate)] for candidate in _dtcg_fonts_for_role(dtcg, "body")
     ]
-    pdf_fonts = _pdf_font_candidates(pdfs)
-    declared_fonts = _declared_font_candidates(pdfs)
+    # Só evita a varredura tipográfica do PDF quando ambos os papéis foram
+    # declarados e ligados a arquivos reais. Uma família apenas citada ou um
+    # pacote incompleto ainda recebe toda a investigação e os fallbacks.
+    font_pdfs = [] if _all_explicit_font_tokens_are_bound(dtcg, bound_by_original_id) else pdfs
+    pdf_fonts = _pdf_font_candidates(font_pdfs)
+    declared_fonts = _declared_font_candidates(font_pdfs)
     # Uma declaração semântica ou token DTCG exprime intenção. As fontes
     # meramente usadas para compor o PDF (Arial, Segoe UI etc.) só entram como
     # fallback quando o papel não possui nenhuma fonte declarada.
@@ -805,8 +846,9 @@ def build_draft(
             "identity.expression",
             "review-identity",
             [expression_candidate],
-            required=True,
+            required=False,
             recommended_count=1,
+            automatic=True,
         ),
         _question(
             "color.primary",

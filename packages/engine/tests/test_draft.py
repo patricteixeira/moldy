@@ -1,3 +1,5 @@
+import json
+
 import pymupdf
 
 from brand_runtime.intake.base import Candidate
@@ -23,6 +25,11 @@ def test_question_set(brand_package):
         "logo.primary",
     ]:
         assert required in ids
+    identity = next(
+        question for question in draft.questions if question.id == "identity.expression"
+    )
+    assert identity.automatic is True
+    assert identity.required is False
 
 
 def test_identity_question_preserves_manual_meaning_as_editable_evidence(tmp_path):
@@ -230,6 +237,88 @@ def test_heading_candidates_prefer_font_files(brand_package):
     first = q.candidates[0]
     assert first.value["family"] == "Fixture Sans"
     assert first.evidence[0].source_type == "font-file"
+
+
+def test_complete_authoritative_tokens_avoid_redundant_pdf_scans(
+    brand_package,
+    monkeypatch,
+):
+    import brand_runtime.intake.draft as draft_module
+
+    (brand_package / "tokens.json").write_text(
+        json.dumps(
+            {
+                "color": {
+                    "primary": {"$type": "color", "$value": "#C05518"},
+                    "secondary": {"$type": "color", "$value": "#202025"},
+                    "background": {"$type": "color", "$value": "#F2EFE7"},
+                    "text": {"$type": "color", "$value": "#202025"},
+                },
+                "font": {
+                    "heading": {
+                        "family": {"$type": "fontFamily", "$value": "Fixture Sans"},
+                        "weight": {"$type": "fontWeight", "$value": 700},
+                    },
+                    "body": {
+                        "family": {"$type": "fontFamily", "$value": "Fixture Sans"},
+                        "weight": {"$type": "fontWeight", "$value": 700},
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def redundant_scan_called(_path):
+        raise AssertionError("evidência autoritativa completa não deve reler o PDF")
+
+    monkeypatch.setattr(draft_module, "extract_pdf_colors", redundant_scan_called)
+    monkeypatch.setattr(draft_module, "extract_pdf_declared_colors", redundant_scan_called)
+    monkeypatch.setattr(draft_module, "extract_pdf_fonts", redundant_scan_called)
+    monkeypatch.setattr(draft_module, "extract_pdf_declared_fonts", redundant_scan_called)
+
+    draft = build_draft(brand_package)
+    questions = {question.id: question for question in draft.questions}
+
+    assert questions["color.primary"].candidates[0].value == "#C05518"
+    assert questions["color.background"].candidates[0].value == "#F2EFE7"
+    assert questions["font.heading"].candidates[0].value["path"].endswith("fixture-sans-bold.ttf")
+    assert questions["font.body"].candidates[0].value["path"].endswith("fixture-sans-bold.ttf")
+
+
+def test_incomplete_materials_keep_pdf_inference_path(brand_package, monkeypatch):
+    import brand_runtime.intake.draft as draft_module
+
+    calls = {"colors": 0, "declaredColors": 0, "fonts": 0, "declaredFonts": 0}
+    original_colors = draft_module.extract_pdf_colors
+    original_declared_colors = draft_module.extract_pdf_declared_colors
+    original_fonts = draft_module.extract_pdf_fonts
+    original_declared_fonts = draft_module.extract_pdf_declared_fonts
+
+    def colors(path):
+        calls["colors"] += 1
+        return original_colors(path)
+
+    def declared_colors(path):
+        calls["declaredColors"] += 1
+        return original_declared_colors(path)
+
+    def fonts(path):
+        calls["fonts"] += 1
+        return original_fonts(path)
+
+    def declared_fonts(path):
+        calls["declaredFonts"] += 1
+        return original_declared_fonts(path)
+
+    monkeypatch.setattr(draft_module, "extract_pdf_colors", colors)
+    monkeypatch.setattr(draft_module, "extract_pdf_declared_colors", declared_colors)
+    monkeypatch.setattr(draft_module, "extract_pdf_fonts", fonts)
+    monkeypatch.setattr(draft_module, "extract_pdf_declared_fonts", declared_fonts)
+
+    build_draft(brand_package)
+
+    assert calls == {"colors": 1, "declaredColors": 1, "fonts": 1, "declaredFonts": 1}
 
 
 def test_dtcg_binding_preserves_font_resource_metadata():

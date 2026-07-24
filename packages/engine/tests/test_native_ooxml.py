@@ -416,6 +416,7 @@ def test_pptx_applies_editor_geometry_typography_and_opacity_overrides(
     edited_content.overrides = {
         "headline": LayerOverride(
             area=(120, 220, 700, 280),
+            rotation_deg=-12,
             opacity=0.55,
             font_token="font.body",
             font_size_px=80,
@@ -427,7 +428,11 @@ def test_pptx_applies_editor_geometry_typography_and_opacity_overrides(
             text_align="right",
             text_transform="uppercase",
         ),
-        "logo": LayerOverride(area=(-180, 780, 1500, 900), opacity=0.4),
+        "logo": LayerOverride(
+            area=(-180, 780, 1500, 900),
+            rotation_deg=27,
+            opacity=0.4,
+        ),
     }
     edited_content.surface = SurfaceStyle(
         kind="technical-grid",
@@ -455,6 +460,8 @@ def test_pptx_applies_editor_geometry_typography_and_opacity_overrides(
     assert headline.left == round(presentation.slide_width * 120 / 1080)
     assert headline.top == round(presentation.slide_height * 220 / 1080)
     assert headline.width == round(presentation.slide_width * 700 / 1080)
+    # OOXML serializa a rotação negativa no intervalo equivalente de 0 a 360.
+    assert headline.rotation == pytest.approx(348)
     assert run.font.name == "Arial"
     assert run.font.size.pt == pytest.approx(60)
     assert run.font.bold is False
@@ -465,6 +472,7 @@ def test_pptx_applies_editor_geometry_typography_and_opacity_overrides(
 
     assert logo.left == round(presentation.slide_width * -180 / 1080)
     assert logo.width == round(presentation.slide_width * 1500 / 1080)
+    assert logo.rotation == pytest.approx(27)
     assert logo._element.xpath(".//a:alphaModFix")[0].get("amt") == "40000"
     surface = next(shape for shape in slide.shapes if shape.name == "br:surface")
     assert surface.shape_type == 13

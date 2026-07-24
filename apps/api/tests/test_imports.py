@@ -79,19 +79,23 @@ def _declared_package(package_zip: bytes, *, bad_hash: bool = False) -> bytes:
     return output.getvalue()
 
 
-def test_import_expoe_apenas_a_leitura_editorial_que_pede_revisao(client, package_zip):
+def test_import_expoe_apenas_decisoes_que_realmente_pedem_revisao(client, package_zip):
     response = _post_zip(client, package_zip)
     assert response.status_code == 201, response.text
+    server_timing = response.headers["server-timing"]
+    assert "unpack;dur=" in server_timing
+    assert "draft-analysis;dur=" in server_timing
+    assert "persistence;dur=" in server_timing
     body = response.json()
     assert body["draftId"].startswith("draft_")
     assert set(body) == {"draftId", "questions", "diagnostics", "ignoredEntries"}
-    assert [question["id"] for question in body["questions"]] == ["identity.expression"]
-    assert all(
-        question["kind"] not in {"pick-color", "pick-font", "confirm-logo"}
-        for question in body["questions"]
-    )
+    assert all(question["id"] != "identity.expression" for question in body["questions"])
     assert all(not question["required"] or question["candidates"] for question in body["questions"])
     assert body["ignoredEntries"] == []
+
+    from brand_runtime.intake.pdf_text import _cached_pdf_text
+
+    assert _cached_pdf_text.cache_info().currsize == 0
 
 
 def test_import_traduz_identidade_localmente_e_persiste_original(make_client):
@@ -108,19 +112,18 @@ def test_import_traduz_identidade_localmente_e_persiste_original(make_client):
 
     assert response.status_code == 201, response.text
     body = response.json()
-    question = next(item for item in body["questions"] if item["id"] == "identity.expression")
-    value = question["candidates"][0]["value"]
+    with client.app.state.session_factory() as session:
+        stored = session.get(Draft, body["draftId"])
+        stored_question = next(
+            item for item in stored.draft["questions"] if item["id"] == "identity.expression"
+        )
+    value = stored_question["candidates"][0]["value"]
     assert value["translationStatus"] == "translated"
     assert value["sourceLanguage"] == "en"
     assert value["displayLanguage"] == "pt-BR"
     assert value["essence"].startswith("PT: ")
     assert value["original"]["essence"].startswith("A quiet house")
 
-    with client.app.state.session_factory() as session:
-        stored = session.get(Draft, body["draftId"])
-        stored_question = next(
-            item for item in stored.draft["questions"] if item["id"] == "identity.expression"
-        )
     assert stored_question["candidates"][0]["value"] == value
 
 
@@ -382,15 +385,10 @@ def test_import_reconhece_extensoes_uppercase(client, package_zip):
 
     assert response.status_code == 201, response.text
     body = response.json()
-    identity = body["questions"][0]["candidates"][0]["value"]
-    identity = {
-        **identity,
-        "essence": identity["essence"].strip() or "Uma marca clara e autoral.",
-    }
     compiled = client.post(
         f"/v1/drafts/{body['draftId']}/compile",
         json={
-            "answers": {"values": {"identity.expression": identity}},
+            "answers": {"values": {}},
             "brandName": "ACME",
         },
     )

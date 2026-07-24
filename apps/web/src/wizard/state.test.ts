@@ -28,6 +28,29 @@ it("identifica apenas perguntas obrigatórias sem candidatos", () => {
   ])
 })
 
+it("não bloqueia fonte obrigatória sem candidato porque o nome pode ser digitado", () => {
+  const fontWithoutCandidate: DraftQuestion = {
+    id: "font.heading",
+    kind: "pick-font",
+    promptPt: "Qual é a fonte dos títulos?",
+    candidates: [],
+    required: true,
+  }
+
+  expect(blockingRequiredQuestions([fontWithoutCandidate])).toEqual([])
+  expect(
+    wizardReducer(initialWizardState, {
+      type: "draft-created",
+      draftId: "d-fonte-manual",
+      questions: [fontWithoutCandidate],
+    }),
+  ).toMatchObject({
+    step: "question",
+    draftId: "d-fonte-manual",
+    index: 0,
+  })
+})
+
 it("draft-created incompleto permanece no envio de materiais", () => {
   const requiredEmpty = { ...q("logo.primary"), candidates: [] }
   expect(
@@ -37,13 +60,21 @@ it("draft-created incompleto permanece no envio de materiais", () => {
       questions: [q("color.primary"), requiredEmpty],
     }),
   ).toEqual(initialWizardState)
+})
+
+it("quando a leitura não exige conferência humana, segue direto para o nome da marca", () => {
   expect(
     wizardReducer(initialWizardState, {
       type: "draft-created",
       draftId: "d-vazio",
       questions: [],
     }),
-  ).toEqual(initialWizardState)
+  ).toEqual({
+    step: "publish",
+    draftId: "d-vazio",
+    questions: [],
+    answers: {},
+  })
 })
 
 it("answer grava e avança; a última leva a publish", () => {

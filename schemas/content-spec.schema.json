@@ -76,6 +76,20 @@
           "default": null,
           "title": "Area"
         },
+        "rotationDeg": {
+          "anyOf": [
+            {
+              "maximum": 180.0,
+              "minimum": -180.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotationdeg"
+        },
         "opacity": {
           "anyOf": [
             {

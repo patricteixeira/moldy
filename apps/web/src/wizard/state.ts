@@ -28,7 +28,14 @@ export type WizardAction =
 export const initialWizardState: WizardState = { step: "upload" }
 
 export function blockingRequiredQuestions(questions: DraftQuestion[]): DraftQuestion[] {
-  return questions.filter((question) => question.required && question.candidates.length === 0)
+  return questions.filter(
+    (question) =>
+      question.required &&
+      question.candidates.length === 0 &&
+      // A etapa tipográfica aceita o nome digitado quando o PDF não expõe
+      // a fonte. Ausência de candidato automático não é ausência de resposta.
+      question.kind !== "pick-font",
+  )
 }
 
 function advance(
@@ -49,10 +56,15 @@ function advance(
 export function wizardReducer(state: WizardState, action: WizardAction): WizardState {
   if (action.type === "restart") return initialWizardState
   if (action.type === "draft-created" && state.step === "upload") {
-    if (
-      action.questions.length === 0 ||
-      blockingRequiredQuestions(action.questions).length > 0
-    ) return state
+    if (blockingRequiredQuestions(action.questions).length > 0) return state
+    if (action.questions.length === 0) {
+      return {
+        step: "publish",
+        draftId: action.draftId,
+        questions: [],
+        answers: {},
+      }
+    }
     return {
       step: "question",
       draftId: action.draftId,

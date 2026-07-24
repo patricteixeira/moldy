@@ -11,6 +11,10 @@ export type AlignmentAxis = "x" | "y"
 export type AlignmentAnchor = "start" | "center" | "end"
 export type AlignmentTargetKind = "canvas" | "safe-area" | "layer"
 export type AlignmentAction = "move" | "resize"
+export interface ResizeAlignmentAnchors {
+  x?: Extract<AlignmentAnchor, "start" | "end">
+  y?: Extract<AlignmentAnchor, "start" | "end">
+}
 
 export interface AlignmentTarget {
   id: string
@@ -61,8 +65,15 @@ function bestGuide(
   action: AlignmentAction,
   targets: AlignmentTarget[],
   thresholdPx: number,
+  resizeAnchors?: ResizeAlignmentAnchors,
 ): AlignmentGuide | null {
-  const movingAnchors = action === "resize" ? (["end"] as AlignmentAnchor[]) : ANCHORS
+  const resizeAnchor = axis === "x" ? resizeAnchors?.x : resizeAnchors?.y
+  const movingAnchors =
+    action === "resize"
+      ? resizeAnchor
+        ? ([resizeAnchor] as AlignmentAnchor[])
+        : []
+      : ANCHORS
   const candidates: AlignmentGuide[] = []
 
   for (const movingAnchor of movingAnchors) {
@@ -162,18 +173,29 @@ export function snapEditorArea(
   action: AlignmentAction,
   targets: AlignmentTarget[],
   thresholdPx: number,
+  resizeAnchors?: ResizeAlignmentAnchors,
 ): AlignmentSnap {
-  const xGuide = bestGuide(area, "x", action, targets, thresholdPx)
-  const yGuide = bestGuide(area, "y", action, targets, thresholdPx)
+  const xGuide = bestGuide(area, "x", action, targets, thresholdPx, resizeAnchors)
+  const yGuide = bestGuide(area, "y", action, targets, thresholdPx, resizeAnchors)
   const next: [number, number, number, number] = [...area]
 
   if (xGuide) {
     if (action === "move") next[0] += xGuide.delta
-    else next[2] += xGuide.delta
+    else if (xGuide.movingAnchor === "start") {
+      next[0] += xGuide.delta
+      next[2] -= xGuide.delta
+    } else {
+      next[2] += xGuide.delta
+    }
   }
   if (yGuide) {
     if (action === "move") next[1] += yGuide.delta
-    else next[3] += yGuide.delta
+    else if (yGuide.movingAnchor === "start") {
+      next[1] += yGuide.delta
+      next[3] -= yGuide.delta
+    } else {
+      next[3] += yGuide.delta
+    }
   }
 
   return {

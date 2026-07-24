@@ -136,7 +136,7 @@ services:
       BRANDRT_API_TOKEN: ${BRANDRT_TOKEN:-brandrt-dev}
       NGINX_ENVSUBST_FILTER: ^BRANDRT_API_TOKEN$
     ports:
-      - "127.0.0.1:${BRANDRT_PORT:-8080}:80"
+      - "${BRANDRT_BIND_HOST:-127.0.0.1}:${BRANDRT_PORT:-8080}:80"
     depends_on:
       api:
         condition: service_healthy

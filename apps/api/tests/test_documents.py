@@ -31,13 +31,14 @@ def test_persiste_overrides_autorais_para_preview_e_export(client, compiled, db)
     payload["overrides"] = {
         "headline": {
             "area": [-70, 300, 1400, 420],
+            "rotationDeg": -12,
             "opacity": 0.64,
             "fontToken": "font.body",
             "fontSizePx": 78,
             "fontWeight": 800,
             "textAlign": "right",
         },
-        "logo": {"area": [-180, 760, 1600, 900], "opacity": 0.45},
+        "logo": {"area": [-180, 760, 1600, 900], "rotationDeg": 27, "opacity": 0.45},
     }
     payload["surface"] = {
         "kind": "technical-grid",

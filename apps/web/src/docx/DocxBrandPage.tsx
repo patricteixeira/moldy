@@ -112,7 +112,7 @@ export function DocxBrandPage(): JSX.Element {
         <h1>Aplicar marca ao Word</h1>
         <p role="alert">{error}</p>
         <Link className="primary-link" to={revisionId ? `/marcas/${revisionId}/kit` : "/"}>
-          Voltar ao kit
+          Voltar aos modelos
         </Link>
       </main>
     )
@@ -139,7 +139,7 @@ export function DocxBrandPage(): JSX.Element {
     >
       <header className="docx-brand-heading" data-motion-enter>
         <div>
-          <p className="product-kicker">Seu documento com a cara da marca</p>
+          <p className="product-kicker">Documento Word com sua marca</p>
           <h1>Aplicar marca ao Word</h1>
           <p>
             Envie um arquivo do Word (.docx). O Molda mostra tudo o que pretende mudar,
@@ -148,7 +148,7 @@ export function DocxBrandPage(): JSX.Element {
           </p>
         </div>
         <Link className="text-action" to={`/marcas/${encodeURIComponent(revisionId)}/kit`}>
-          Voltar ao kit
+          Voltar aos modelos
         </Link>
       </header>
 

@@ -11,11 +11,11 @@ interface Props {
 }
 
 const compositionNames = {
-  contemplative: "Silêncio estruturado",
-  asymmetric: "Assimetria com propósito",
-  modular: "Precisão modular",
-  expansive: "Escala sem contenção",
-  layered: "Profundidade em camadas",
+  contemplative: "Mais espaço entre os elementos",
+  asymmetric: "Composição assimétrica",
+  modular: "Organização em grade",
+  expansive: "Títulos maiores",
+  layered: "Elementos em camadas",
 } as const
 
 function surfaceName(kind: SurfaceStyle["kind"]): string {
@@ -56,8 +56,7 @@ export function DirectionPanel({
         </>
       ) : (
         <p className="direction-summary">
-          Ainda faltam informações para sugerir uma aparência própria. O Molda não vai preencher
-          essa falta com um modelo genérico.
+          Ainda faltam dados para gerar uma sugestão.
         </p>
       )}
 
@@ -74,6 +73,7 @@ export function DirectionPanel({
           <label>
             <span>Cor</span>
             <select
+              name="surface-color"
               value={surface.colorToken}
               disabled={disabled}
               onChange={(event) => update({ colorToken: event.currentTarget.value })}
@@ -87,6 +87,7 @@ export function DirectionPanel({
             <label>
               <span>Transparência</span>
               <input
+                name="surface-opacity"
                 type="number"
                 min="0"
                 max="1"
@@ -99,6 +100,7 @@ export function DirectionPanel({
             <label>
               <span>Tamanho</span>
               <input
+                name="surface-scale"
                 type="number"
                 min="4"
                 max="512"
@@ -110,6 +112,7 @@ export function DirectionPanel({
             <label>
               <span>Espessura</span>
               <input
+                name="surface-weight"
                 type="number"
                 min="0.1"
                 max="32"
@@ -122,6 +125,7 @@ export function DirectionPanel({
             <label>
               <span>Rotação</span>
               <input
+                name="surface-angle"
                 type="number"
                 min="-180"
                 max="180"

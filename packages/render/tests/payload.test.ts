@@ -496,6 +496,7 @@ it("aceita overrides editoriais completos para os tipos compatíveis", () => {
   payload.contentSpec.overrides = {
     headline: {
       area: [80, 300, 800, 500],
+      rotationDeg: -12,
       opacity: 0.7,
       hidden: false,
       zIndex: 18,
@@ -583,6 +584,10 @@ it("aceita sangria autoral e rejeita overrides desconhecidos, patológicos e inc
   const pathological = compositionPayload();
   pathological.contentSpec.overrides = { headline: { area: [-32769, 0, 100, 100] } };
   expect(() => parsePayload(pathological)).toThrowError(/entre -32768 e 32768/i);
+
+  const pathologicalRotation = compositionPayload();
+  pathologicalRotation.contentSpec.overrides = { headline: { rotationDeg: 181 } };
+  expect(() => parsePayload(pathologicalRotation)).toThrowError(/rotationDeg.*-180 e 180/i);
 
   const font = compositionPayload();
   font.contentSpec.overrides = { headline: { fontToken: "font.inexistente" } };
